@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "external/libs/libsdptransform/readme-helper",
+		"source" : "external/libs/libsdptransform/readme-helper"
+	}
+}

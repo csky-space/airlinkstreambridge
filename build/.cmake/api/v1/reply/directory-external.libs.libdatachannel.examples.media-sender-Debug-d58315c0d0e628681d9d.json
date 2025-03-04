@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "external/libs/libdatachannel/examples/media-sender",
+		"source" : "external/libs/libdatachannel/examples/media-sender"
+	}
+}

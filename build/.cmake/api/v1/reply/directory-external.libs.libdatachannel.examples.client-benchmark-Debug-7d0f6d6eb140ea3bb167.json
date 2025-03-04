@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "external/libs/libdatachannel/examples/client-benchmark",
+		"source" : "external/libs/libdatachannel/examples/client-benchmark"
+	}
+}
