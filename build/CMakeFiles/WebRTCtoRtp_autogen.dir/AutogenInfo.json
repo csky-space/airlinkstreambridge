@@ -160,6 +160,12 @@
 			null
 		],
 		[
+			"/home/szamaro/Projects/WebRTCtoLocalRTP/src/WebRTCConnection/ConfigurationClient.hpp",
+			"Mu",
+			"AKYPJNBEFB/moc_ConfigurationClient.cpp",
+			null
+		],
+		[
 			"/home/szamaro/Projects/WebRTCtoLocalRTP/src/WebRTCConnection/Receive/WebRTCReceiver.hpp",
 			"Mu",
 			"NEX5OJECUO/moc_WebRTCReceiver.cpp",
@@ -209,10 +215,10 @@
 		"/home/szamaro/Projects/WebRTCtoLocalRTP/external/libs/libsdptransform/include",
 		"/home/szamaro/Projects/WebRTCtoLocalRTP/external/libs/uvgRTP/include",
 		"/home/szamaro/Projects/WebRTCtoLocalRTP/external/libs/libdatachannel/include",
-		"/home/szamaro/Qt/6.8.2/gcc_64/include/QtNetwork",
-		"/home/szamaro/Qt/6.8.2/gcc_64/include",
 		"/home/szamaro/Qt/6.8.2/gcc_64/include/QtCore",
+		"/home/szamaro/Qt/6.8.2/gcc_64/include",
 		"/home/szamaro/Qt/6.8.2/gcc_64/mkspecs/linux-g++",
+		"/home/szamaro/Qt/6.8.2/gcc_64/include/QtNetwork",
 		"/usr/local/include",
 		"/usr/include/c++/12",
 		"/usr/include/x86_64-linux-gnu/c++/12",
@@ -271,6 +277,11 @@
 		],
 		[
 			"/home/szamaro/Projects/WebRTCtoLocalRTP/external/libs/simdjson/singleheader/simdjson.cpp",
+			"Mu",
+			null
+		],
+		[
+			"/home/szamaro/Projects/WebRTCtoLocalRTP/src/WebRTCConnection/ConfigurationClient.cpp",
 			"Mu",
 			null
 		],

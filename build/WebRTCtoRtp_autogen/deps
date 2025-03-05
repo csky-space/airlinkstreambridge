@@ -8,6 +8,8 @@ WebRTCtoRtp_autogen/timestamp: \
 	/home/szamaro/Projects/WebRTCtoLocalRTP/external/libs/libsdptransform/src/writer.cpp \
 	/home/szamaro/Projects/WebRTCtoLocalRTP/external/libs/simdjson/singleheader/simdjson.cpp \
 	/home/szamaro/Projects/WebRTCtoLocalRTP/external/libs/simdjson/singleheader/simdjson.h \
+	/home/szamaro/Projects/WebRTCtoLocalRTP/src/WebRTCConnection/ConfigurationClient.cpp \
+	/home/szamaro/Projects/WebRTCtoLocalRTP/src/WebRTCConnection/ConfigurationClient.hpp \
 	/home/szamaro/Projects/WebRTCtoLocalRTP/src/WebRTCConnection/Receive/WebRTCReceiver.cpp \
 	/home/szamaro/Projects/WebRTCtoLocalRTP/src/WebRTCConnection/Receive/WebRTCReceiver.hpp \
 	/home/szamaro/Projects/WebRTCtoLocalRTP/src/WebRTCConnection/Transfer/RTPSender.cpp \

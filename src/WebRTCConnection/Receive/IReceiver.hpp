@@ -8,6 +8,7 @@ public:
     virtual bool isOpened() const = 0;
     virtual bool isClosed() = 0;
     virtual bool isClosed() const = 0;
+    //virtual void waitForConnection() = 0;
 };
 
 #endif

@@ -1,12 +1,15 @@
 #include <cstdint>
 #include <cstring>
 #include <ratio>
+#include <utility>
 #include <vector>
 #include <thread>
 #include <chrono>
 #include <memory>
 #include <iostream>
 
+#include "WebRTCConnection/ConfigurationClient.hpp"
+#include "WebRTCConnection/Receive/IReceiver.hpp"
 #include "WebRTCConnection/Receive/WebRTCReceiver.hpp"
 #include "WebRTCConnection/Transfer/RTPSender.hpp"
 #include "WebRTCConnection/Transfer/UDPSender.hpp"
@@ -16,16 +19,22 @@ using std::chrono_literals::operator""ms;
 int main(int argc, char** argv) {   
     std::shared_ptr<ISender> sender = std::make_shared<UDPSender>();
     //------------------------------------------------------------------------------
-    std::unique_ptr<IReceiver> receiver = std::make_unique<WebRTCReceiver>(sender);
-
+    ConfigurationClient client("https://stage.air-link.space");
+    auto configs = client.getConfiguration();
+    std::shared_ptr<WebRTCReceiver> webrtcReceiver = 
+    std::make_shared<WebRTCReceiver>(std::get<0>(configs), std::get<1>(configs), std::get<2>(configs));
+    
+    webrtcReceiver->onVideoMessage([sender](std::vector<uint8_t>&& videoMessage){
+        sender->sendData(std::move(videoMessage));
+    });
     //------------------------------------------------------------------------------
-
-    while (!receiver->isOpened()) {
-		if (receiver->isClosed())
+    std::shared_ptr<IReceiver> receiver = webrtcReceiver;
+    while (!webrtcReceiver->isOpened()) {
+		if (webrtcReceiver->isClosed())
 			return 1;
 		std::this_thread::sleep_for(100ms);
 	}
-    while(receiver->isOpened()) {
+    while(webrtcReceiver->isOpened()) {
 
     }
     

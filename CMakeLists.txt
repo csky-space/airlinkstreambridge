@@ -35,7 +35,7 @@ target_sources(WebRTCtoRtp PRIVATE ${WEBRTC_TO_RTP_HEADERS} ${WEBRTC_TO_RTP_SOUR
 
 #link_directories(/usr/local/lib)
 target_link_libraries(WebRTCtoRtp PRIVATE uvgrtp datachannel)
-target_link_libraries(WebRTCtoRtp PRIVATE Qt6::Network)
+target_link_libraries(WebRTCtoRtp PRIVATE Qt6::Core Qt6::Network)
 
 
 

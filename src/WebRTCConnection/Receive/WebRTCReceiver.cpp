@@ -9,15 +9,9 @@
 #include <ostream>
 #include <sstream>
 #include <variant>
+#include <vector>
 
-
-#include "rtc/h265nalunit.hpp"
-#include "rtc/nalunit.hpp"
-#include "rtc/rtcpnackresponder.hpp"
-#include "rtc/rtcpsrreporter.hpp"
-#include "rtc/rtpdepacketizer.hpp"
-#include "rtc/rtppacketizationconfig.hpp"
-#include "rtc/track.hpp"
+#include <rtc/track.hpp>
 #include <rtc/datachannel.hpp>
 #include <rtc/description.hpp>
 #include <rtc/configuration.hpp>
@@ -31,30 +25,27 @@
 #include <sdptransform.hpp>
 
 #include <simdjson.h>
-#include <vector>
-
 
 #include "../Transfer/ISender.hpp"
 
 #define VIRTUAL_ID "4221"
 
-WebRTCReceiver::WebRTCReceiver(std::shared_ptr<ISender> sender) 
+WebRTCReceiver::WebRTCReceiver(std::span<IceServerConfig> stunUrls, std::span<IceServerConfig> turnUrls, std::string_view signalUrl)
     : IReceiver()
-    , sender(sender)
     , parser()
     , config(std::make_unique<rtc::Configuration>())
     , ws(std::make_shared<rtc::WebSocket>())
+    , wsUrl(signalUrl)
 {
-    config->iceServers.emplace_back("stun:turn.air-link.space");
-    rtc::IceServer turnzur("turn:turnzur.air-link.space");
-    rtc::IceServer turn("turn:turn.air-link.space");
-    turnzur.username = "airlink";
-    turnzur.password = "lbjT3jXHt";
-    turn.username = "airlink";
-    turn.password = "lbjT3jXHt";
-
-    config->iceServers.push_back(turn);
-    config->iceServers.push_back(turnzur);
+    for(const auto& serverConfig : stunUrls) {
+        config->iceServers.emplace_back(serverConfig.url);
+    }
+    for(const auto& serverConfig : turnUrls) {
+        rtc::IceServer server(serverConfig.url);
+        server.username = serverConfig.login;
+        server.password = serverConfig.password;
+        config->iceServers.push_back(server);
+    }
 
     config->disableAutoNegotiation = true;
 
@@ -100,6 +91,10 @@ bool WebRTCReceiver::isClosed() {
 
 bool WebRTCReceiver::isClosed() const {
     return ws->isClosed();
+}
+
+void WebRTCReceiver::onVideoMessage(const std::function<void(std::vector<uint8_t>&&)>& onVideoMessageAction) {
+    this->onVideoMessageAction = onVideoMessageAction;
 }
 
 void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
@@ -153,7 +148,7 @@ void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
                         auto description = peerConnection->localDescription();
                         std::cout << "description type is " << description->typeString() << '\n';
                         json message = {{"id", VIRTUAL_ID}, {"type", description->typeString()}, {"sdp", description.value()}};
-                        // Gathering complete, send answer
+
                         std::cout << "localDescription is: " << message.dump(0) << '\n';
                         ws->send(message.dump());
                     }
@@ -164,14 +159,6 @@ void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
                 if(track->description().type() == "video") {
                     this->track = track;
                     std::cout << "adding a track\n";
-                    //std::shared_ptr<rtc::RtpPacketizationConfig> rtpPacketizationConf = 
-                    //    std::make_shared<rtc::RtpPacketizationConfig>(42, "video-send", 96, 90000);
-                    //std::shared_ptr<rtc::RtpDe> session = 
-                    //    std::make_shared<rtc::H265RtpPacketizer>(rtc::NalUnit::Separator::Length, rtpPacketizationConf);
-
-                    //auto nackResponder = std::make_shared<rtc::RtcpNackResponder>();
-                    //session->addToChain(nackResponder);
-                    //track->setMediaHandler(session);
 
                     track->onMessage([this](std::variant<rtc::binary, std::string> data){
                         std::cout << "onMessage\n";
@@ -181,15 +168,8 @@ void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
                         std::vector<uint8_t> vData;
                         vData.resize(bytedData.size());
                         std::memcpy(vData.data(), bytedData.data(),  bytedData.size());
-                        sender->sendData(std::move(vData));
-                    });
-                    
-                    track->onFrame([this](const rtc::binary& frame, rtc::FrameInfo info){
-                        //std::cout << "Received a frame\n";
-                        //std::vector<uint8_t> vData;
-                        //vData.resize(frame.size());
-                        //std::memcpy(vData.data(), frame.data(),  frame.size());
-                        //sender->sendData(std::move(vData));
+                        if(onVideoMessageAction)
+                            onVideoMessageAction(std::move(vData));
                     });
                 }
                 
