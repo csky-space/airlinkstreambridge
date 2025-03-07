@@ -3,20 +3,16 @@
 
 #include <string>
 #include <string_view>
-#include <tuple>
-#include <vector>
 #include <memory>
 
 #include <cpprest/http_client.h>
 
-#include "../IceServerConfig.hpp"
-
-
+#include "../WebrtcConfig.hpp"
 
 class ConfigurationClient {
 public:
     ConfigurationClient(std::string_view configurationServerUrl, std::string_view login, std::string_view password);
-    std::tuple<std::vector<IceServerConfig>, std::vector<IceServerConfig>, std::string> getConfiguration() const;
+    WebrtcConfiguration getConfiguration() const;
 private:
     void requestToLogin();
     void requestToConfig();
@@ -27,7 +23,7 @@ private:
 
     std::string accessToken;
     
-    std::tuple<std::vector<IceServerConfig>, std::vector<IceServerConfig>, std::string> capturedConfigs;
+    WebrtcConfiguration configuration;
 
     std::string url;
     std::string login;

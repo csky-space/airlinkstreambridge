@@ -13,3 +13,6 @@
 [submodule "external/libs/cpprestsdk"]
 	path = external/libs/cpprestsdk
 	url = https://github.com/microsoft/cpprestsdk.git
+[submodule "external/libs/CLI11"]
+	path = external/libs/CLI11
+	url = https://github.com/CLIUtils/CLI11.git

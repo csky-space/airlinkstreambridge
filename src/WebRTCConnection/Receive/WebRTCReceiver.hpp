@@ -9,7 +9,7 @@
 #include <simdjson.h>
 
 #include "IReceiver.hpp"
-#include "../../IceServerConfig.hpp"
+#include "../../WebrtcConfig.hpp"
 
 
 namespace rtc {
@@ -25,7 +25,8 @@ class ISender;
 
 class WebRTCReceiver : public IReceiver {
 public:
-    WebRTCReceiver(const std::vector<IceServerConfig>& stunUrls, const std::vector<IceServerConfig>& turnUrls, std::string_view signalUrl);
+    WebRTCReceiver(const std::vector<IceServerConfig>& stunServerConfigs, const std::vector<IceServerConfig>& turnServerConfigs, std::string_view signalUrl);
+    explicit WebRTCReceiver(WebrtcConfiguration&& configuration) noexcept;
     ~WebRTCReceiver();
 
     bool isOpened() override;
@@ -33,7 +34,9 @@ public:
     bool isClosed() override;
     bool isClosed() const override;
 
-    void onVideoMessage(const std::function<void(std::vector<uint8_t>&&)>& onVideoMessageAction);
+    void waitForConnection() override;
+
+    void onData(const std::function<void(std::vector<uint8_t>&&)>& onVideoMessageAction) override;
 protected:
     void onWsMessage(simdjson::ondemand::document& message);
 private:

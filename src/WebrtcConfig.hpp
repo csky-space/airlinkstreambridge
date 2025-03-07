@@ -1,0 +1,14 @@
+#ifndef WEBRTC_CONFIG_HPP
+#define WEBRTC_CONFIG_HPP
+
+#include <vector>
+
+#include "IceServerConfig.hpp"
+
+struct WebrtcConfiguration {
+    std::vector<IceServerConfig>    stunServerConfigs; 
+    std::vector<IceServerConfig>    turnServersConfigs; 
+    std::string                     wsUrl;
+};
+
+#endif

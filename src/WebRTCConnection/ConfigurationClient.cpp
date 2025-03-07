@@ -13,8 +13,8 @@ ConfigurationClient::ConfigurationClient(std::string_view configurationServerUrl
     requestToConfig();
 }
 
-std::tuple<std::vector<IceServerConfig>, std::vector<IceServerConfig>, std::string> ConfigurationClient::getConfiguration() const {
-    return capturedConfigs;
+WebrtcConfiguration ConfigurationClient::getConfiguration() const {
+    return configuration;
 }
 
 void ConfigurationClient::requestToLogin() {
@@ -43,7 +43,7 @@ void ConfigurationClient::requestToLogin() {
     }
 }
 
-void ConfigurationClient::requestToConfig() {
+void ConfigurationClient::requestToConfig() {    
     web::http::http_request request(web::http::methods::GET);
     request.headers().set_content_type("application/json");
     request.set_request_uri(prefix + "/config");
@@ -60,15 +60,15 @@ void ConfigurationClient::requestToConfig() {
     nlohmann::json replyBody = nlohmann::json::parse(response.extract_string().get());
     std::cout << "reply on get config" << replyBody.dump() << '\n';
     for(const auto& server : replyBody["stunServers"]) {
-        std::get<0>(capturedConfigs).push_back({server, "", ""});
+        configuration.stunServerConfigs.push_back({server, "", ""});
     }
     
     for(const auto& server : replyBody["turnServers"]) {
-        std::get<1>(capturedConfigs).push_back(
+        configuration.turnServersConfigs.push_back(
             {server["url"], 
                 server["username"], 
                 server["credential"]});
     }
     
-    std::get<2>(capturedConfigs) = replyBody["wsUrl"];
+    configuration.wsUrl = replyBody["wsUrl"];
 }
