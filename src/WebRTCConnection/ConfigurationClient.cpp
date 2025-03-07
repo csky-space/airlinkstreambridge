@@ -1,25 +1,16 @@
 #include "ConfigurationClient.hpp"
+#include "cpprest/http_msg.h"
+#include "json.hpp"
+#include <ostream>
 
-#include <QNetworkAccessManager>
-#include <QJsonObject>
-#include <QJsonDocument>
-#include <qeventloop.h>
-#include <qhttpheaders.h>
-#include <qjsonobject.h>
-#include <qnetworkaccessmanager.h>
-#include <qobject.h>
-#include <qvariant.h>
-#include <QEventLoop>
-#include <QNetworkReply>
-#include <QJsonArray>
-
-ConfigurationClient::ConfigurationClient(std::string_view configurationServerUrl) 
-    : url(configurationServerUrl)
-{
+ConfigurationClient::ConfigurationClient(std::string_view configurationServerUrl, std::string_view login, std::string_view password) 
+    : client(std::make_unique<web::http::client::http_client>(configurationServerUrl.data()))
+    , url(configurationServerUrl)
+    , login(login)
+    , password(password)
+{ 
     requestToLogin();
-    parseLogin();
     requestToConfig();
-    parseConfig();
 }
 
 std::tuple<std::vector<IceServerConfig>, std::vector<IceServerConfig>, std::string> ConfigurationClient::getConfiguration() const {
@@ -27,64 +18,57 @@ std::tuple<std::vector<IceServerConfig>, std::vector<IceServerConfig>, std::stri
 }
 
 void ConfigurationClient::requestToLogin() {
-    QNetworkAccessManager manager;
-    QJsonObject jsonRequestObject;
-    jsonRequestObject["name"] = "name";
-    jsonRequestObject["password"] = "password";
-    QJsonDocument document(jsonRequestObject);
-
-    QNetworkRequest request(QString(url.data()) + "/GroundStation/login");
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-
-    QEventLoop loop;
-    QNetworkReply* reply = manager.post(request, document.toJson());
-    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    nlohmann::json jsonRequestObject;
+    jsonRequestObject["name"] = login;
+    jsonRequestObject["pass"] = password;
     
-    loop.exec();
-    JSONReply = QJsonDocument::fromJson(reply->readAll());
-    reply->deleteLater();
+    web::http::http_request request(web::http::methods::POST);
+    request.headers().set_content_type("application/json");
+    request.set_body(jsonRequestObject.dump());
+    request.set_request_uri(prefix + "/login");
+    
+    auto result = client->request(request);
+    result.wait();
+    
+    auto response = result.get();
+    if (response.status_code() != web::http::status_codes::OK) {
+        throw std::runtime_error("Login failed with status: " + std::to_string(response.status_code()));
+    }
+
+    nlohmann::json replyBody = nlohmann::json::parse(response.extract_string().get());
+    if (replyBody.contains("accessToken")) {
+        accessToken = replyBody["accessToken"].get<std::string>();
+    } else {
+        throw std::runtime_error("No access token in response");
+    }
 }
 
 void ConfigurationClient::requestToConfig() {
-    QNetworkAccessManager manager;
-    QJsonObject jsonRequestObject;
-    jsonRequestObject["name"] = "name";
-    jsonRequestObject["password"] = "password";
-    QJsonDocument document(jsonRequestObject);
+    web::http::http_request request(web::http::methods::GET);
+    request.headers().set_content_type("application/json");
+    request.set_request_uri(prefix + "/config");
+    request.headers().add("Authorization", "Bearer " + accessToken);
 
-    QNetworkRequest request(QString(url.data()) + "/GroundStation/login");
-    QHttpHeaders headers;
-    headers.append(QHttpHeaders::WellKnownHeader::ContentType, "application/json");
-    headers.append(QHttpHeaders::WellKnownHeader::Authorization, QString("Bearer ") + accessToken.c_str());
-    request.setHeaders(headers);
+    std::cout << "response is: " << request.to_string() << '\n';
+    auto result = client->request(request);
+    result.wait();
+    auto response = result.get();
+    if (response.status_code() != web::http::status_codes::OK) {
+        throw std::runtime_error("Login failed with status: " + std::to_string(response.status_code()));
+    }
 
-    QEventLoop loop;
-    QNetworkReply* reply = manager.post(request, document.toJson());
-    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    
-    loop.exec();
-    JSONReply = QJsonDocument::fromJson(reply->readAll());
-    reply->deleteLater();
-}
-
-void ConfigurationClient::parseLogin() {
-    accessToken = JSONReply["accessToken"].toString().toStdString();
-}
-
-void ConfigurationClient::parseConfig() {
-    QJsonArray stunServers = JSONReply["stunServers"].toArray();
-    for(const auto& server : stunServers) {
-        std::get<0>(capturedConfigs).push_back({server.toString().toStdString()});
+    nlohmann::json replyBody = nlohmann::json::parse(response.extract_string().get());
+    std::cout << "reply on get config" << replyBody.dump() << '\n';
+    for(const auto& server : replyBody["stunServers"]) {
+        std::get<0>(capturedConfigs).push_back({server, "", ""});
     }
     
-    QJsonArray turnServers = JSONReply["turnServers"].toArray();
-    for(const auto& server : turnServers) {
-        QJsonObject serverObj = server.toObject();
+    for(const auto& server : replyBody["turnServers"]) {
         std::get<1>(capturedConfigs).push_back(
-            {serverObj["url"].toString().toStdString(), 
-                serverObj["username"].toString().toStdString(), 
-                serverObj["credential"].toString().toStdString()});
+            {server["url"], 
+                server["username"], 
+                server["credential"]});
     }
     
-    std::get<2>(capturedConfigs) = JSONReply["wsUrl"].toString().toStdString();
+    std::get<2>(capturedConfigs) = replyBody["wsUrl"];
 }

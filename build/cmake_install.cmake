@@ -44,6 +44,11 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
+  include("/home/szamaro/Projects/WebRTCtoLocalRTP/build/external/libs/cpprestsdk/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
   include("/home/szamaro/Projects/WebRTCtoLocalRTP/build/external/libs/libdatachannel/cmake_install.cmake")
 endif()
 

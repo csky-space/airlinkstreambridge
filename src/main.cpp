@@ -1,6 +1,6 @@
 #include <cstdint>
 #include <cstring>
-#include <ratio>
+#include <qcoreapplication.h>
 #include <utility>
 #include <vector>
 #include <thread>
@@ -8,18 +8,19 @@
 #include <memory>
 #include <iostream>
 
+#include <QCoreApplication>
+
 #include "WebRTCConnection/ConfigurationClient.hpp"
 #include "WebRTCConnection/Receive/IReceiver.hpp"
 #include "WebRTCConnection/Receive/WebRTCReceiver.hpp"
-#include "WebRTCConnection/Transfer/RTPSender.hpp"
 #include "WebRTCConnection/Transfer/UDPSender.hpp"
 
 using std::chrono_literals::operator""ms;
 
-int main(int argc, char** argv) {   
+int main() {  
     std::shared_ptr<ISender> sender = std::make_shared<UDPSender>();
     //------------------------------------------------------------------------------
-    ConfigurationClient client("https://stage.air-link.space");
+    ConfigurationClient client("https://stage.air-link.space/api/", "001D0", "HM9-qc5-Ddq-mgy");
     auto configs = client.getConfiguration();
     std::shared_ptr<WebRTCReceiver> webrtcReceiver = 
     std::make_shared<WebRTCReceiver>(std::get<0>(configs), std::get<1>(configs), std::get<2>(configs));
@@ -29,6 +30,7 @@ int main(int argc, char** argv) {
     });
     //------------------------------------------------------------------------------
     std::shared_ptr<IReceiver> receiver = webrtcReceiver;
+
     while (!webrtcReceiver->isOpened()) {
 		if (webrtcReceiver->isClosed())
 			return 1;

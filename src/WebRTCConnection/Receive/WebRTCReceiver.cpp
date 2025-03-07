@@ -1,13 +1,10 @@
 #include "WebRTCReceiver.hpp"
 
-#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
-#include <fstream>
 #include <memory>
 #include <ostream>
-#include <sstream>
 #include <variant>
 #include <vector>
 
@@ -26,16 +23,14 @@
 
 #include <simdjson.h>
 
-#include "../Transfer/ISender.hpp"
-
 #define VIRTUAL_ID "4221"
 
-WebRTCReceiver::WebRTCReceiver(std::span<IceServerConfig> stunUrls, std::span<IceServerConfig> turnUrls, std::string_view signalUrl)
+WebRTCReceiver::WebRTCReceiver(const std::vector<IceServerConfig>& stunUrls, const std::vector<IceServerConfig>& turnUrls, std::string_view signalUrl)
     : IReceiver()
+    , wsUrl(signalUrl)
     , parser()
     , config(std::make_unique<rtc::Configuration>())
     , ws(std::make_shared<rtc::WebSocket>())
-    , wsUrl(signalUrl)
 {
     for(const auto& serverConfig : stunUrls) {
         config->iceServers.emplace_back(serverConfig.url);
@@ -63,14 +58,11 @@ WebRTCReceiver::WebRTCReceiver(std::span<IceServerConfig> stunUrls, std::span<Ic
             std::cout << "unsupported message\n";
             return;
         }
-			
-
-		std::cout << "onMessage\n";
         simdjson::ondemand::document message = parser.iterate(std::get<std::string>(data));
         onWsMessage(message);
 	});
 
-    ws->open(wsUrl.data());
+    ws->open(wsUrl + "?name=GS001D0&partnerName=001D0");
 }
 
 WebRTCReceiver::~WebRTCReceiver() {
@@ -122,16 +114,8 @@ void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
 
 	if (type == "offer") {
 		std::cout << "offer\n";
-    
-        std::fstream f("/home/szamaro/Projects/WebRTCtoLocalRTP/build/offer.sdp");
 
-        if(f.is_open() && !peerConnection) {
-            std::stringstream buffer;
-            buffer << f.rdbuf();
-            
-            auto rtspSDPJSON = sdptransform::parse((buffer.str()));
-            std::cout << rtspSDPJSON.dump(4) << std::endl;
-            f.close();
+        if(!peerConnection) {
             peerConnection = std::make_unique<rtc::PeerConnection>(*config);
             
             peerConnection->onStateChange([](rtc::PeerConnection::State state){
@@ -160,11 +144,8 @@ void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
                     this->track = track;
                     std::cout << "adding a track\n";
 
-                    track->onMessage([this](std::variant<rtc::binary, std::string> data){
-                        std::cout << "onMessage\n";
-                        
+                    track->onMessage([this](std::variant<rtc::binary, std::string> data){                        
                         rtc::binary bytedData = std::get<rtc::binary>(data);
-                        std::cout << "message is: " << bytedData.size() << '\n';
                         std::vector<uint8_t> vData;
                         vData.resize(bytedData.size());
                         std::memcpy(vData.data(), bytedData.data(),  bytedData.size());

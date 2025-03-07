@@ -10,3 +10,6 @@
 [submodule "external/libs/libsdptransform"]
 	path = external/libs/libsdptransform
 	url = https://github.com/ibc/libsdptransform.git
+[submodule "external/libs/cpprestsdk"]
+	path = external/libs/cpprestsdk
+	url = https://github.com/microsoft/cpprestsdk.git

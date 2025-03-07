@@ -25,7 +25,7 @@ class ISender;
 
 class WebRTCReceiver : public IReceiver {
 public:
-    WebRTCReceiver(std::span<IceServerConfig> stunUrls, std::span<IceServerConfig> turnUrls, std::string_view signalUrl);
+    WebRTCReceiver(const std::vector<IceServerConfig>& stunUrls, const std::vector<IceServerConfig>& turnUrls, std::string_view signalUrl);
     ~WebRTCReceiver();
 
     bool isOpened() override;

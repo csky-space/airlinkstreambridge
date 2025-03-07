@@ -2122,3 +2122,80 @@ events:
         
       exitCode: 0
 ...
+
+---
+events:
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/usr/share/cmake-3.31/Modules/CheckIncludeFiles.cmake:141 (try_compile)"
+      - "external/libs/cpprestsdk/Release/CMakeLists.txt:85 (CHECK_INCLUDE_FILES)"
+    checks:
+      - "Looking for include file xlocale.h"
+    directories:
+      source: "/home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-MPmDx8"
+      binary: "/home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-MPmDx8"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "HAVE_XLOCALE_H"
+      cached: true
+      stdout: |
+        Change Dir: '/home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-MPmDx8'
+        
+        Run Build Command(s): /usr/bin/ninja -v cmTC_22c0f
+        [1/2] /usr/bin/gcc-12    -o CMakeFiles/cmTC_22c0f.dir/HAVE_XLOCALE_H.c.o -c /home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-MPmDx8/HAVE_XLOCALE_H.c
+        FAILED: CMakeFiles/cmTC_22c0f.dir/HAVE_XLOCALE_H.c.o 
+        /usr/bin/gcc-12    -o CMakeFiles/cmTC_22c0f.dir/HAVE_XLOCALE_H.c.o -c /home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-MPmDx8/HAVE_XLOCALE_H.c
+        /home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-MPmDx8/HAVE_XLOCALE_H.c:2:10: fatal error: xlocale.h: No such file or directory
+            2 | #include <xlocale.h>
+              |          ^~~~~~~~~~~
+        compilation terminated.
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+...
+
+---
+events:
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/usr/share/cmake-3.31/Modules/Internal/CheckSourceCompiles.cmake:108 (try_compile)"
+      - "/usr/share/cmake-3.31/Modules/CheckCXXSourceCompiles.cmake:58 (cmake_check_source_compiles)"
+      - "external/libs/cpprestsdk/Release/cmake/cpprest_find_openssl.cmake:59 (CHECK_CXX_SOURCE_COMPILES)"
+      - "external/libs/cpprestsdk/Release/cmake/cpprest_find_websocketpp.cmake:18 (cpprest_find_openssl)"
+      - "external/libs/cpprestsdk/Release/src/CMakeLists.txt:68 (cpprest_find_websocketpp)"
+    checks:
+      - "Performing Test _SSL_LEAK_SUPPRESS_AVAILABLE"
+    directories:
+      source: "/home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-2ft9qk"
+      binary: "/home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-2ft9qk"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: " -std=c++11 -fno-strict-aliasing"
+      CMAKE_CXX_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "_SSL_LEAK_SUPPRESS_AVAILABLE"
+      cached: true
+      stdout: |
+        Change Dir: '/home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-2ft9qk'
+        
+        Run Build Command(s): /usr/bin/ninja -v cmTC_003dc
+        [1/2] /usr/bin/c++ -D_SSL_LEAK_SUPPRESS_AVAILABLE -I/home/szamaro/openssl/openssl-1.1.1q/include -std=c++11 -fno-strict-aliasing  -std=gnu++20 -o CMakeFiles/cmTC_003dc.dir/src.cxx.o -c /home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-2ft9qk/src.cxx
+        FAILED: CMakeFiles/cmTC_003dc.dir/src.cxx.o 
+        /usr/bin/c++ -D_SSL_LEAK_SUPPRESS_AVAILABLE -I/home/szamaro/openssl/openssl-1.1.1q/include -std=c++11 -fno-strict-aliasing  -std=gnu++20 -o CMakeFiles/cmTC_003dc.dir/src.cxx.o -c /home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-2ft9qk/src.cxx
+        In file included from /home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-2ft9qk/src.cxx:2:
+        /home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-2ft9qk/src.cxx: In function ‘int main()’:
+        /home/szamaro/openssl/openssl-1.1.1q/include/openssl/ssl.h:2097:47: error: expected id-expression before ‘while’
+         2097 | #  define SSL_COMP_free_compression_methods() while(0) continue
+              |                                               ^~~~~
+        /home/szamaro/Projects/WebRTCtoLocalRTP/build/CMakeFiles/CMakeScratch/TryCompile-2ft9qk/src.cxx:5:9: note: in expansion of macro ‘SSL_COMP_free_compression_methods’
+            5 |       ::SSL_COMP_free_compression_methods();
+              |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+...
