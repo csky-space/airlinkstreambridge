@@ -19,7 +19,7 @@ foreach(SUBPROJECT_PATH ${SUBPROJECT_PATHS})
     endif()
 endforeach()
 
-find_package(Qt6 COMPONENTS REQUIRED Core Network)
+find_package(Qt6 COMPONENTS REQUIRED Network)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -36,7 +36,7 @@ file(GLOB LIB_SDP_TRANSFORM_SOURCES external/libs/libsdptransform/src/*.cpp)
 target_sources(${PROJECT_NAME} PRIVATE ${WEBRTC_TO_RTP_HEADERS} ${WEBRTC_TO_RTP_SOURCES} external/libs/simdjson/singleheader/simdjson.cpp ${LIB_SDP_TRANSFORM_SOURCES})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE uvgrtp datachannel cpprest CLI11::CLI11)
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Core Qt6::Network)
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Network)
 
 
 
