@@ -1,9 +1,13 @@
+#include <bits/chrono.h>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <qcoreapplication.h>
+#include <thread>
 #include <utility>
 #include <vector>
 #include <memory>
+
+#include <qcoreapplication.h>
 
 #include <CLI/CLI.hpp>
 
@@ -11,6 +15,9 @@
 #include "WebRTCConnection/Receive/IReceiver.hpp"
 #include "WebRTCConnection/Receive/WebRTCReceiver.hpp"
 #include "WebRTCConnection/Transfer/UDPSender.hpp"
+
+using std::chrono_literals::operator""ms;
+
 
 int main(int argc, char** argv) {  
     //==============================================================================
@@ -21,16 +28,20 @@ int main(int argc, char** argv) {
     std::string modemName;
     std::string password;
     std::vector<std::string> modemNames;
+    size_t udpPort = 5000;
 
     app.add_option("-a,--api-url", apiURL, "provide the api server url for a getting configuration");
     app.add_option("-m,--modem-name", modemName, "provide the Air-link modem name");
     app.add_option("-p,--password", password, "provide a password for the authorization");
+    app.add_option("-s,--stream-port", udpPort, "The bridge will streams to this port. It doesn't work yet");
+    
     //for multi modems support
     //app.add_option("-mn", modemNames, "modem-names");
 
     CLI11_PARSE(app, argc, argv);
     //==============================================================================
-    std::shared_ptr<Airlink::ISender> sender = std::make_shared<Airlink::UDPSender>();
+    QHostAddress udpAddress = QHostAddress::SpecialAddress::LocalHost;
+    std::shared_ptr<Airlink::ISender> sender = std::make_shared<Airlink::UDPSender>(udpAddress, udpPort);
     //------------------------------------------------------------------------------
     Airlink::ConfigurationClient client(apiURL, modemName, password);
     auto webrtcConfig = client.getConfiguration();
@@ -44,8 +55,9 @@ int main(int argc, char** argv) {
     
     receiver->waitForConnection();
     
-    while(true) {
-        receiver->onUpdate();
+    while(receiver->isOpened()) {
+        std::this_thread::sleep_for(100ms);
+        //receiver->onUpdate();
     }
     
     return 0;

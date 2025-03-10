@@ -1,16 +1,19 @@
 #ifndef WEBRTC_RECEIVER_HPP
 #define WEBRTC_RECEIVER_HPP
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string_view>
 #include <functional>
+#include <chrono>
 
 #include <simdjson.h>
 
 #include "IReceiver.hpp"
 #include "../WebrtcConfig.hpp"
 
+using std::chrono_literals::operator""ms;
 
 namespace rtc {
     class WebSocket;
@@ -63,7 +66,8 @@ private:
     
     std::string lastSDP = "";
     
-    bool peerConnectionShouldBeRecreated = false;
+    std::chrono::duration<long double, std::milli> failedTimeout = 5000ms;
+    bool failed = false;
 };
 
 } //Airlink

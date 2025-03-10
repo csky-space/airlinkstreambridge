@@ -1,5 +1,6 @@
 #include "WebRTCReceiver.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -33,11 +34,13 @@ namespace Airlink {
     WebRTCReceiver::WebRTCReceiver(const std::vector<IceServerConfig>& stunServerConfigs, const std::vector<IceServerConfig>& turnServerConfigs, std::string_view signalUrl)
     : IReceiver()
     , wsUrl(signalUrl)
-    , ws(std::make_shared<rtc::WebSocket>())
     , webrtcConfig{stunServerConfigs, turnServerConfigs, signalUrl.data()}
     , parser()
     , config(std::make_unique<rtc::Configuration>())
 {
+    rtc::WebSocketConfiguration wsConfig;
+    wsConfig.connectionTimeout = std::chrono::duration<uint32_t>(30);
+    ws = std::make_shared<rtc::WebSocket>(wsConfig);
     connectToSignallingServer();
 }
 
@@ -85,17 +88,7 @@ void WebRTCReceiver::onData(const std::function<void(std::vector<uint8_t>&&)>& o
 }
 
 void WebRTCReceiver::onUpdate() {
-    std::mutex mut;
-    mut.lock();
-    if(peerConnectionShouldBeRecreated) {
-        peerConnectionShouldBeRecreated = false;
-        //peerConnection->close();
-        ws->close();
-        while(ws->isOpen()) {}
-        connectWebRtc();
-        
-    }
-    mut.unlock();
+    
 }
 
 void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
@@ -124,10 +117,8 @@ void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
 	if (type == "offer") {
 		std::cout << "offer\n";
 
-        if(!peerConnection) {
-            lastSDP = message["sdp"].get_string().value().data();
-            createPeerConnection();
-        }
+        lastSDP = message["sdp"].get_string().value().data();
+        createPeerConnection();
 	}
 }
 
@@ -147,9 +138,8 @@ void WebRTCReceiver::connectToSignallingServer() {
     }
 
     config->disableAutoNegotiation = true;
-
     ws->onOpen([this](){
-        std::cout << "ping";
+        std::cout << "ping\n";
         ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
     });
 
@@ -176,10 +166,16 @@ void WebRTCReceiver::createPeerConnection() {
         if (state == rtc::PeerConnection::State::Disconnected || state == rtc::PeerConnection::State::Failed ||
             state == rtc::PeerConnection::State::Closed) {
                 std::cout << "State: " << state << std::endl;
+                if(failed) {
+                    std::this_thread::sleep_for(failedTimeout);
+                    std::cout << "ping\n";
+                    ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
+                    failed = false;
+                }
+
             }
         if(state == rtc::PeerConnection::State::Failed) {
-            peerConnectionShouldBeRecreated = true;
-            //peerConnection->close(); 
+            failed = true;
         }
                 
     });
