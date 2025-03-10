@@ -9,6 +9,8 @@
 
 #include "WebrtcConfig.hpp"
 
+namespace Airlink {
+
 class ConfigurationClient {
 public:
     ConfigurationClient(std::string_view configurationServerUrl, std::string_view login, std::string_view password);
@@ -30,5 +32,7 @@ private:
     std::string password;
     std::string prefix = "/groundStation";
 };
+
+}
 
 #endif

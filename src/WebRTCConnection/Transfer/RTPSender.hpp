@@ -20,6 +20,8 @@ namespace uvgrtp {
 }
 //==================================
 
+namespace Airlink {
+
 class RtpSender : public ISender {
 public:
     RtpSender();
@@ -35,5 +37,6 @@ private:
     uvgrtp::media_stream* strm = nullptr;
 };
 
+} //Airlink
 
 #endif

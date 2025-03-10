@@ -1,5 +1,6 @@
 #include "UDPSender.hpp"
 
+namespace Airlink {
 
 UDPSender::UDPSender(QHostAddress address, size_t port) 
     : ISender()
@@ -25,3 +26,5 @@ void UDPSender::sendData(std::vector<uint8_t>& data) const {
 void UDPSender::sendData(std::vector<uint8_t>&& data) const {
     //socket.writeDatagram(QByteArray(reinterpret_cast<const char*>(data.data()), data.size()), address, port);
 }
+
+} //Airlink

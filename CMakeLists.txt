@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 project(AirlinkStreamBridge LANGUAGES C CXX VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 17)
+
 set(SIMDJSON_SINGLE_HEADER_DIR external/libs/simdjson/singleheader)
 set(LIBSDPTRANSFORM_DIR external/libs/libsdptransform)
 

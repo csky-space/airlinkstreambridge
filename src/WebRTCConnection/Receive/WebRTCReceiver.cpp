@@ -29,7 +29,8 @@
 
 using std::chrono_literals::operator""ms;
 
-WebRTCReceiver::WebRTCReceiver(const std::vector<IceServerConfig>& stunServerConfigs, const std::vector<IceServerConfig>& turnServerConfigs, std::string_view signalUrl)
+namespace Airlink {
+    WebRTCReceiver::WebRTCReceiver(const std::vector<IceServerConfig>& stunServerConfigs, const std::vector<IceServerConfig>& turnServerConfigs, std::string_view signalUrl)
     : IReceiver()
     , wsUrl(signalUrl)
     , ws(std::make_shared<rtc::WebSocket>())
@@ -171,51 +172,53 @@ void WebRTCReceiver::connectToSignallingServer() {
 void WebRTCReceiver::createPeerConnection() {
     peerConnection = std::make_unique<rtc::PeerConnection>(*config);
             
-            peerConnection->onStateChange([this](rtc::PeerConnection::State state){
-                if (state == rtc::PeerConnection::State::Disconnected || state == rtc::PeerConnection::State::Failed ||
-                    state == rtc::PeerConnection::State::Closed) {
-                        std::cout << "State: " << state << std::endl;
-                    }
-                if(state == rtc::PeerConnection::State::Failed) {
-                    peerConnectionShouldBeRecreated = true;
-                    //peerConnection->close(); 
-                }
+    peerConnection->onStateChange([this](rtc::PeerConnection::State state){
+        if (state == rtc::PeerConnection::State::Disconnected || state == rtc::PeerConnection::State::Failed ||
+            state == rtc::PeerConnection::State::Closed) {
+                std::cout << "State: " << state << std::endl;
+            }
+        if(state == rtc::PeerConnection::State::Failed) {
+            peerConnectionShouldBeRecreated = true;
+            //peerConnection->close(); 
+        }
                 
-            });
-            peerConnection->onGatheringStateChange([this](rtc::PeerConnection::GatheringState state){
-                if (state == rtc::PeerConnection::GatheringState::Complete) {
-                    if (peerConnection) {
-                        std::cout << "gathering complete\n";
+    });
+    peerConnection->onGatheringStateChange([this](rtc::PeerConnection::GatheringState state){
+        if (state == rtc::PeerConnection::GatheringState::Complete) {
+            if (peerConnection) {
+                std::cout << "gathering complete\n";
                         
-                        auto description = peerConnection->localDescription();
-                        std::cout << "description type is " << description->typeString() << '\n';
-                        json message = {{"id", VIRTUAL_ID}, {"type", description->typeString()}, {"sdp", description.value()}};
+                auto description = peerConnection->localDescription();
+                std::cout << "description type is " << description->typeString() << '\n';
+                json message = {{"id", VIRTUAL_ID}, {"type", description->typeString()}, {"sdp", description.value()}};
 
-                        std::cout << "localDescription is: " << message.dump(0) << '\n';
-                        ws->send(message.dump());
-                    }
-                }
+                std::cout << "localDescription is: " << message.dump(0) << '\n';
+                ws->send(message.dump());
+            }
+        }
+    });
+
+    peerConnection->onTrack([this](std::shared_ptr<rtc::Track> track){
+        if(track->description().type() == "video") {
+            this->track = track;
+            std::cout << "adding a track\n";
+
+            track->onMessage([this](std::variant<rtc::binary, std::string> data){                        
+                rtc::binary bytedData = std::get<rtc::binary>(data);
+                std::vector<uint8_t> vData;
+                vData.resize(bytedData.size());
+                std::memcpy(vData.data(), bytedData.data(),  bytedData.size());
+                if(onVideoMessageAction)
+                    onVideoMessageAction(std::move(vData));
             });
-
-            peerConnection->onTrack([this](std::shared_ptr<rtc::Track> track){
-                if(track->description().type() == "video") {
-                    this->track = track;
-                    std::cout << "adding a track\n";
-
-                    track->onMessage([this](std::variant<rtc::binary, std::string> data){                        
-                        rtc::binary bytedData = std::get<rtc::binary>(data);
-                        std::vector<uint8_t> vData;
-                        vData.resize(bytedData.size());
-                        std::memcpy(vData.data(), bytedData.data(),  bytedData.size());
-                        if(onVideoMessageAction)
-                            onVideoMessageAction(std::move(vData));
-                    });
-                }
+        }
                 
-            });
+    });
 
-            rtc::Description description(lastSDP, "offer");
-            peerConnection->setRemoteDescription(description);
+    rtc::Description description(lastSDP, "offer");
+    peerConnection->setRemoteDescription(description);
 
-            peerConnection->setLocalDescription();
+    peerConnection->setLocalDescription();
 }
+
+} //Airlink

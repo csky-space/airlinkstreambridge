@@ -10,6 +10,8 @@
 
 #include "ISender.hpp"
 
+namespace Airlink {
+
 class UDPSender : public ISender {
 public:
     UDPSender(QHostAddress address = QHostAddress::SpecialAddress::LocalHost, size_t port = 5000);
@@ -23,5 +25,7 @@ private:
     QHostAddress address;
     size_t port;
 };
+
+}
 
 #endif

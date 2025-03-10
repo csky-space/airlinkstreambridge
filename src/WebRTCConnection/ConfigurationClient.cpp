@@ -3,6 +3,8 @@
 #include "json.hpp"
 #include <ostream>
 
+namespace Airlink {
+
 ConfigurationClient::ConfigurationClient(std::string_view configurationServerUrl, std::string_view login, std::string_view password) 
     : client(std::make_unique<web::http::client::http_client>(configurationServerUrl.data()))
     , url(configurationServerUrl)
@@ -71,4 +73,6 @@ void ConfigurationClient::requestToConfig() {
     }
     
     configuration.wsUrl = replyBody["wsUrl"];
+}
+
 }

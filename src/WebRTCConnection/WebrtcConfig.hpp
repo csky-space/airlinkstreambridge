@@ -5,10 +5,14 @@
 
 #include "IceServerConfig.hpp"
 
+namespace Airlink {
+
 struct WebrtcConfiguration {
     std::vector<IceServerConfig>    stunServerConfigs; 
     std::vector<IceServerConfig>    turnServersConfigs; 
     std::string                     wsUrl;
 };
+
+}
 
 #endif

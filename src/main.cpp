@@ -30,12 +30,12 @@ int main(int argc, char** argv) {
 
     CLI11_PARSE(app, argc, argv);
     //==============================================================================
-    std::shared_ptr<ISender> sender = std::make_shared<UDPSender>();
+    std::shared_ptr<Airlink::ISender> sender = std::make_shared<Airlink::UDPSender>();
     //------------------------------------------------------------------------------
-    ConfigurationClient client(apiURL, modemName, password);
+    Airlink::ConfigurationClient client(apiURL, modemName, password);
     auto webrtcConfig = client.getConfiguration();
     webrtcConfig.wsUrl += std::string("?name=GS") + modemName + "&partnerName=" + modemName; 
-    std::shared_ptr<IReceiver> receiver = std::make_shared<WebRTCReceiver>(std::move(webrtcConfig));
+    std::shared_ptr<Airlink::IReceiver> receiver = std::make_shared<Airlink::WebRTCReceiver>(std::move(webrtcConfig));
     
     receiver->onData([sender](std::vector<uint8_t>&& videoMessage){
         sender->sendData(videoMessage);

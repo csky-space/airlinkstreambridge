@@ -3,10 +3,14 @@
 
 #include <string>
 
+namespace Airlink {
+
 struct IceServerConfig {
     std::string url;
     std::string login;
     std::string password;
 };
+
+}
 
 #endif
