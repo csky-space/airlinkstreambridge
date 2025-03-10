@@ -20,10 +20,13 @@ int main(int argc, char** argv) {
     std::string apiURL;
     std::string modemName;
     std::string password;
+    std::vector<std::string> modemNames;
 
     app.add_option("-a,--api-url", apiURL, "provide the api server url for a getting configuration");
     app.add_option("-m,--modem-name", modemName, "provide the Air-link modem name");
     app.add_option("-p,--password", password, "provide a password for the authorization");
+    //for multi modems support
+    //app.add_option("-mn", modemNames, "modem-names");
 
     CLI11_PARSE(app, argc, argv);
     //==============================================================================
@@ -41,8 +44,8 @@ int main(int argc, char** argv) {
     
     receiver->waitForConnection();
     
-    while(receiver->isOpened()) {
-
+    while(true) {
+        receiver->onUpdate();
     }
     
     return 0;

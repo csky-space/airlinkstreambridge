@@ -7,7 +7,7 @@
 
 #include <cpprest/http_client.h>
 
-#include "../WebrtcConfig.hpp"
+#include "WebrtcConfig.hpp"
 
 class ConfigurationClient {
 public:

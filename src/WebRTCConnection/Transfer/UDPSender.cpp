@@ -1,6 +1,5 @@
 #include "UDPSender.hpp"
-#include <qhostaddress.h>
-#include <qstringview.h>
+
 
 UDPSender::UDPSender(QHostAddress address, size_t port) 
     : ISender()

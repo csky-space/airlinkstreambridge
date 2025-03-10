@@ -15,6 +15,7 @@ public:
     virtual void waitForConnection() = 0;
 
     virtual void onData(const std::function<void(std::vector<uint8_t>&&)>& onVideoMessageAction) = 0;
+    virtual void onUpdate() = 0;
 };
 
 #endif

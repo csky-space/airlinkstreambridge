@@ -8,7 +8,7 @@
 #include <variant>
 #include <vector>
 #include <thread>
-#include <chrono>
+#include <mutex>
 
 #include <rtc/track.hpp>
 #include <rtc/datachannel.hpp>
@@ -32,81 +32,23 @@ using std::chrono_literals::operator""ms;
 WebRTCReceiver::WebRTCReceiver(const std::vector<IceServerConfig>& stunServerConfigs, const std::vector<IceServerConfig>& turnServerConfigs, std::string_view signalUrl)
     : IReceiver()
     , wsUrl(signalUrl)
+    , ws(std::make_shared<rtc::WebSocket>())
+    , webrtcConfig{stunServerConfigs, turnServerConfigs, signalUrl.data()}
     , parser()
     , config(std::make_unique<rtc::Configuration>())
-    , ws(std::make_shared<rtc::WebSocket>())
 {
-    for(const auto& serverConfig : stunServerConfigs) {
-        config->iceServers.emplace_back(serverConfig.url);
-    }
-    for(const auto& serverConfig : turnServerConfigs) {
-        rtc::IceServer server(serverConfig.url);
-        server.username = serverConfig.login;
-        server.password = serverConfig.password;
-        config->iceServers.push_back(server);
-    }
-
-    config->disableAutoNegotiation = true;
-
-    ws->onOpen([this](){
-        std::cout << "ping";
-        ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
-    });
-
-    ws->onClosed([]() { std::cout << "WebSocket closed" << std::endl; });
-
-	ws->onError([](const std::string &error) { std::cout << "WebSocket failed: " << error << std::endl; });
-
-	ws->onMessage([&](std::variant<rtc::binary, std::string> data) {
-		if (!std::get_if<std::string>(&data)) {
-            std::cout << "unsupported message\n";
-            return;
-        }
-        simdjson::ondemand::document message = parser.iterate(std::get<std::string>(data));
-        onWsMessage(message);
-	});
-
-    ws->open(wsUrl);
+    connectToSignallingServer();
 }
 
 WebRTCReceiver::WebRTCReceiver(WebrtcConfiguration&& configuration) noexcept 
     : IReceiver()
     , wsUrl(configuration.wsUrl)
+    , ws(std::make_shared<rtc::WebSocket>())
+    , webrtcConfig(configuration)
     , parser()
     , config(std::make_unique<rtc::Configuration>())
-    , ws(std::make_shared<rtc::WebSocket>())
 {
-    for(const auto& serverConfig : configuration.stunServerConfigs) {
-        config->iceServers.emplace_back(serverConfig.url);
-    }
-    for(const auto& serverConfig : configuration.turnServersConfigs) {
-        rtc::IceServer server(serverConfig.url);
-        server.username = serverConfig.login;
-        server.password = serverConfig.password;
-        config->iceServers.push_back(server);
-    }
-
-    config->disableAutoNegotiation = true;
-
-    ws->onOpen([this](){
-        std::cout << "ping";
-        ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
-    });
-
-    ws->onClosed([]() { std::cout << "WebSocket closed" << std::endl; });
-
-	ws->onError([](const std::string &error) { std::cout << "WebSocket failed: " << error << std::endl; });
-
-	ws->onMessage([&](std::variant<rtc::binary, std::string> data) {
-		if (!std::get_if<std::string>(&data)) {
-            std::cout << "unsupported message\n";
-            return;
-        }
-        simdjson::ondemand::document message = parser.iterate(std::get<std::string>(data));
-        onWsMessage(message);
-	});
-
-    ws->open(wsUrl);
+    connectToSignallingServer();
 }
 
 WebRTCReceiver::~WebRTCReceiver() {
@@ -141,6 +83,20 @@ void WebRTCReceiver::onData(const std::function<void(std::vector<uint8_t>&&)>& o
     this->onVideoMessageAction = onVideoMessageAction;
 }
 
+void WebRTCReceiver::onUpdate() {
+    std::mutex mut;
+    mut.lock();
+    if(peerConnectionShouldBeRecreated) {
+        peerConnectionShouldBeRecreated = false;
+        //peerConnection->close();
+        ws->close();
+        while(ws->isOpen()) {}
+        connectWebRtc();
+        
+    }
+    mut.unlock();
+}
+
 void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
     std::cout << "parsed on message\n";
 
@@ -168,13 +124,63 @@ void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
 		std::cout << "offer\n";
 
         if(!peerConnection) {
-            peerConnection = std::make_unique<rtc::PeerConnection>(*config);
+            lastSDP = message["sdp"].get_string().value().data();
+            createPeerConnection();
+        }
+	}
+}
+
+void WebRTCReceiver::connectWebRtc() {
+    connectToSignallingServer();
+}
+
+void WebRTCReceiver::connectToSignallingServer() {
+    for(const auto& serverConfig : webrtcConfig.stunServerConfigs) {
+        config->iceServers.emplace_back(serverConfig.url);
+    }
+    for(const auto& serverConfig : webrtcConfig.turnServersConfigs) {
+        rtc::IceServer server(serverConfig.url);
+        server.username = serverConfig.login;
+        server.password = serverConfig.password;
+        config->iceServers.push_back(server);
+    }
+
+    config->disableAutoNegotiation = true;
+
+    ws->onOpen([this](){
+        std::cout << "ping";
+        ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
+    });
+
+    ws->onClosed([]() { std::cout << "WebSocket closed" << std::endl; });
+
+	ws->onError([](const std::string &error) { std::cout << "WebSocket failed: " << error << std::endl; });
+
+	ws->onMessage([&](std::variant<rtc::binary, std::string> data) {
+		if (!std::get_if<std::string>(&data)) {
+            std::cout << "unsupported message\n";
+            return;
+        }
+        simdjson::ondemand::document message = parser.iterate(std::get<std::string>(data));
+        onWsMessage(message);
+	});
+
+    ws->open(wsUrl);
+}
+
+void WebRTCReceiver::createPeerConnection() {
+    peerConnection = std::make_unique<rtc::PeerConnection>(*config);
             
-            peerConnection->onStateChange([](rtc::PeerConnection::State state){
+            peerConnection->onStateChange([this](rtc::PeerConnection::State state){
                 if (state == rtc::PeerConnection::State::Disconnected || state == rtc::PeerConnection::State::Failed ||
                     state == rtc::PeerConnection::State::Closed) {
                         std::cout << "State: " << state << std::endl;
                     }
+                if(state == rtc::PeerConnection::State::Failed) {
+                    peerConnectionShouldBeRecreated = true;
+                    //peerConnection->close(); 
+                }
+                
             });
             peerConnection->onGatheringStateChange([this](rtc::PeerConnection::GatheringState state){
                 if (state == rtc::PeerConnection::GatheringState::Complete) {
@@ -208,10 +214,8 @@ void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
                 
             });
 
-            rtc::Description description(message["sdp"].get_string().value().data(), type);
+            rtc::Description description(lastSDP, "offer");
             peerConnection->setRemoteDescription(description);
 
             peerConnection->setLocalDescription();
-        }
-	}
 }

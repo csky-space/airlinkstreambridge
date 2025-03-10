@@ -1,13 +1,14 @@
 #ifndef UDP_SENDER_HPP
 #define UDP_SENDER_HPP
 
-#include "ISender.hpp"
+
 #include <cstddef>
 #include <cstdint>
 
 #include <QUdpSocket>
-#include <qhostaddress.h>
-#include <qudpsocket.h>
+#include <QHostAddress>
+
+#include "ISender.hpp"
 
 class UDPSender : public ISender {
 public:
