@@ -7,7 +7,7 @@
 #include <functional>
 #include <chrono>
 
-#include <simdjson.h>
+#include <json.hpp>
 
 #include "IReceiver.hpp"
 #include "../WebrtcConfig.hpp"
@@ -43,7 +43,7 @@ public:
     void onData(const std::function<void(std::vector<uint8_t>&&)>& onVideoMessageAction) override;
     void onUpdate() override;
 protected:
-    void onWsMessage(simdjson::ondemand::document& message);
+    void onWsMessage(const nlohmann::json& message);
 private:
     void connectWebRtc();
     void connectToSignallingServer();
@@ -52,8 +52,6 @@ private:
     std::string wsUrl;
     std::shared_ptr<rtc::WebSocket> ws;
     WebrtcConfiguration webrtcConfig;
-        
-    simdjson::ondemand::parser parser;
     
     std::unique_ptr<rtc::Configuration> config;
     std::unique_ptr<rtc::PeerConnection> peerConnection;

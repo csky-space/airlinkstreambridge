@@ -4,9 +4,6 @@
 [submodule "external/libs/libdatachannel"]
 	path = external/libs/libdatachannel
 	url = https://github.com/paullouisageneau/libdatachannel.git
-[submodule "external/libs/simdjson"]
-	path = external/libs/simdjson
-	url = https://github.com/simdjson/simdjson.git
 [submodule "external/libs/libsdptransform"]
 	path = external/libs/libsdptransform
 	url = https://github.com/ibc/libsdptransform.git

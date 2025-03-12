@@ -5,10 +5,9 @@
 #include <string_view>
 #include <memory>
 
-//#include <Poco/Net/HTTPClientSession.h>
-//#include <Poco/URI.h>
-//
-//#include <cpprest/http_client.h>
+#include <Poco/Net/HTTPSClientSession.h>
+#include <Poco/URI.h>
+
 
 #include "WebrtcConfig.hpp"
 
@@ -24,8 +23,10 @@ private:
 
     void parseLogin();
 
-    //Poco::Net::HTTPClientSession session;
-    //Poco::URI apiURI;
+    Poco::Net::HTTPSClientSession session;
+    Poco::Net::Context::Ptr pContext;
+
+    Poco::URI apiURI;
 
     std::string accessToken;
     
@@ -34,7 +35,7 @@ private:
     std::string hostUrl;
     std::string login;
     std::string password;
-    std::string prefix = "/groundStation";
+    std::string queryPrefix = "/api/groundStation";
 };
 
 }

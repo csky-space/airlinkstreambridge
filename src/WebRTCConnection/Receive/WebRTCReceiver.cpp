@@ -34,7 +34,6 @@ namespace Airlink {
     : IReceiver()
     , wsUrl(signalUrl)
     , webrtcConfig{stunServerConfigs, turnServerConfigs, signalUrl.data()}
-    , parser()
     , config(std::make_unique<rtc::Configuration>())
 {
     
@@ -46,7 +45,6 @@ WebRTCReceiver::WebRTCReceiver(WebrtcConfiguration&& configuration) noexcept
     , wsUrl(configuration.wsUrl)
     , ws(std::make_shared<rtc::WebSocket>())
     , webrtcConfig(configuration)
-    , parser()
     , config(std::make_unique<rtc::Configuration>())
 {
     connectToSignallingServer();
@@ -88,23 +86,23 @@ void WebRTCReceiver::onUpdate() {
     
 }
 
-void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
+void WebRTCReceiver::onWsMessage(const nlohmann::json& message) {
     std::cout << "parsed on message\n";
 
-    auto idResult = message.find_field("id");
-    if(idResult.error() != simdjson::SUCCESS) {
+    auto idResult = message.find("id");
+    if(idResult != message.end()) {
         return;
     }
 
-    std::string id(idResult.get_string().value());
+    std::string id(idResult->dump());
 
 
-    auto typeResult = message.find_field("type");
-    if(typeResult.error() != simdjson::SUCCESS) {
+    auto typeResult = message.find("type");
+    if(typeResult != message.end()) {
         return;
     }
 
-    std::string type(typeResult.get_string().value());
+    std::string type(typeResult->dump());
 
     if (type == "ping") {
         std::cout << "send request\n";
@@ -114,7 +112,7 @@ void WebRTCReceiver::onWsMessage(simdjson::ondemand::document& message) {
 	if (type == "offer") {
 		std::cout << "offer\n";
 
-        lastSDP = message["sdp"].get_string().value().data();
+        lastSDP = message["sdp"].dump();
         createPeerConnection();
 	}
 }
@@ -152,7 +150,7 @@ void WebRTCReceiver::connectToSignallingServer() {
             std::cout << "unsupported message\n";
             return;
         }
-        simdjson::ondemand::document message = parser.iterate(std::get<std::string>(data));
+        nlohmann::json message = nlohmann::json::parse(std::get<std::string>(data));
         onWsMessage(message);
 	});
 

@@ -5,12 +5,11 @@
 
 #include "json.hpp"
 
-//#include <Poco/Net/HTTPRequest.h>
-//#include <Poco/Net/HTTPResponse.h>
-//#include <Poco/StreamCopier.h>
-//#include <Poco/Net/Net.h>
-//
-//#include "cpprest/http_msg.h"
+#include <Poco/Net/SSLManager.h>
+#include <Poco/Net/HTTPRequest.h>
+#include <Poco/Net/HTTPResponse.h>
+#include <Poco/Net/AcceptCertificateHandler.h>
+#include <Poco/StreamCopier.h>
 
 
 
@@ -18,14 +17,21 @@
 namespace Airlink {
 
 ConfigurationClient::ConfigurationClient(std::string_view configurationServerUrl, std::string_view login, std::string_view password) 
-    : //session(configurationServerUrl.data(), 443)
-    //, //apiURI(configurationServerUrl.data())
-     hostUrl(configurationServerUrl)
+    : session(configurationServerUrl.data(), 443)
+    , apiURI(std::string(configurationServerUrl))
+    , hostUrl(apiURI.getHost())
     , login(login)
     , password(password)
 { 
-    //Poco::Net::initializeSSL();
-    //session.setKeepAlive(true);
+    Poco::Net::initializeSSL();
+    Poco::SharedPtr<Poco::Net::InvalidCertificateHandler> pCertHandler = 
+            new Poco::Net::AcceptCertificateHandler(true);
+    pContext = 
+            new Poco::Net::Context(Poco::Net::Context::CLIENT_USE, "", "", "", 
+                                  Poco::Net::Context::VERIFY_NONE, 9, false, 
+                                  "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
+        Poco::Net::SSLManager::instance().initializeClient(0, pCertHandler, pContext);
+    session.setKeepAlive(true);
     requestToLogin();
     requestToConfig();
 }
@@ -40,70 +46,59 @@ void ConfigurationClient::requestToLogin() {
     jsonRequestObject["pass"] = password;
     const std::string body = jsonRequestObject.dump();
 
-    //Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST, apiURI.getPathAndQuery() + prefix + "/login", Poco::Net::HTTPMessage::HTTP_1_1);
-    //request.setContentType("application/json");
-    //
-    //request.setContentLength(body.length());
-    //std::cout << "host is: " << session.getHost() << '\n';
-    //
-    //std::ostream& os = session.sendRequest(request);
-    //os  << body;
-//
-    //Poco::Net::HTTPResponse response;
-    //std::istream& responseStream = session.receiveResponse(response);
-    //std::ostringstream responseData;
-    //Poco::StreamCopier::copyStream(responseStream, responseData);
+    Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST, queryPrefix + "/login", Poco::Net::HTTPMessage::HTTP_1_1);
+    request.setContentType("application/json");
     
-    //web::http::http_request request(web::http::methods::POST);
-    //request.headers().set_content_type("application/json");
-    //request.set_body(jsonRequestObject.dump());
-    //request.set_request_uri(prefix + "/login");
-    //
-    //auto result = client->request(request);
-    //result.wait();
-    //
-    //auto response = result.get();
-    //if (response.status_code() != web::http::status_codes::OK) {
-    //    throw std::runtime_error("Login failed with status: " + std::to_string(response.status_code()));
-    //}
+    request.setContentLength(body.length());
+    std::cout << "host is: " << session.getHost() << '\n';
+    
+    std::ostream& os = session.sendRequest(request);
+    os  << body;
 
-    //std::cout << "response: " + responseData.str() + '\n';
-    //nlohmann::json replyBody = nlohmann::json::parse(responseData.str());
-    //if (replyBody.contains("accessToken")) {
-    //    accessToken = replyBody["accessToken"].get<std::string>();
-    //} else {
-    //    throw std::runtime_error("No access token in response");
-    //}
+    Poco::Net::HTTPResponse response;
+    std::istream& responseStream = session.receiveResponse(response);
+    std::ostringstream responseData;
+    Poco::StreamCopier::copyStream(responseStream, responseData);
+
+    std::cout << "response: " + responseData.str() + '\n';
+    nlohmann::json replyBody = nlohmann::json::parse(responseData.str());
+    if (replyBody.contains("accessToken")) {
+        accessToken = replyBody["accessToken"].get<std::string>();
+    } else {
+        throw std::runtime_error("No access token in response");
+    }
 }
 
 void ConfigurationClient::requestToConfig() {    
-    //web::http::http_request request(web::http::methods::GET);
-    //request.headers().set_content_type("application/json");
-    //request.set_request_uri(prefix + "/config");
-    //request.headers().add("Authorization", "Bearer " + accessToken);
-//
-    //std::cout << "response is: " << request.to_string() << '\n';
-    //auto result = client->request(request);
-    //result.wait();
-    //auto response = result.get();
-    //if (response.status_code() != web::http::status_codes::OK) {
-    //    throw std::runtime_error("Login failed with status: " + std::to_string(response.status_code()));
-    //}
-//
-    //nlohmann::json replyBody = nlohmann::json::parse(response.extract_string().get());
-    //std::cout << "reply on get config" << replyBody.dump() << '\n';
-    //for(const auto& server : replyBody["stunServers"]) {
-    //    configuration.stunServerConfigs.push_back({server, "", ""});
-    //}
-    //
-    //for(const auto& server : replyBody["turnServers"]) {
-    //    configuration.turnServersConfigs.push_back(
-    //        {server["url"], 
-    //            server["username"], 
-    //            server["credential"]});
-    //}
-    //
-    //configuration.wsUrl = replyBody["wsUrl"];
+    Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, queryPrefix + "/config", Poco::Net::HTTPMessage::HTTP_1_1);
+    request.add("Authorization", "Bearer " + accessToken);
+    request.setContentType("application/json");
+
+    std::cout << "host is: " << session.getHost() << '\n';
+
+    session.sendRequest(request);
+
+    Poco::Net::HTTPResponse response;
+    std::istream& responseStream = session.receiveResponse(response);
+    std::ostringstream responseData;
+    Poco::StreamCopier::copyStream(responseStream, responseData);
+
+    std::cout << "response: " + responseData.str() + '\n';
+    nlohmann::json replyBody = nlohmann::json::parse(responseData.str());
+
+    std::cout << "reply on get config" << replyBody.dump() << '\n';
+    for(const auto& server : replyBody["stunServers"]) {
+        configuration.stunServerConfigs.push_back({server, "", ""});
+    }
+    
+    for(const auto& server : replyBody["turnServers"]) {
+        configuration.turnServersConfigs.push_back(
+            {server["url"], 
+                server["username"], 
+                server["credential"]});
+    }
+    
+    configuration.wsUrl = replyBody["wsUrl"];
 }
 
 }
