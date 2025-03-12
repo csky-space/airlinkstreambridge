@@ -10,9 +10,9 @@
 [submodule "external/libs/libsdptransform"]
 	path = external/libs/libsdptransform
 	url = https://github.com/ibc/libsdptransform.git
-[submodule "external/libs/cpprestsdk"]
-	path = external/libs/cpprestsdk
-	url = https://github.com/microsoft/cpprestsdk.git
 [submodule "external/libs/CLI11"]
 	path = external/libs/CLI11
 	url = https://github.com/CLIUtils/CLI11.git
+[submodule "external/libs/poco"]
+	path = external/libs/poco
+	url = https://github.com/pocoproject/poco.git

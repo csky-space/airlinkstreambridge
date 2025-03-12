@@ -7,8 +7,6 @@
 #include <vector>
 #include <memory>
 
-#include <qcoreapplication.h>
-
 #include <CLI/CLI.hpp>
 
 #include "WebRTCConnection/ConfigurationClient.hpp"
@@ -40,8 +38,7 @@ int main(int argc, char** argv) {
 
     CLI11_PARSE(app, argc, argv);
     //==============================================================================
-    QHostAddress udpAddress = QHostAddress::SpecialAddress::LocalHost;
-    std::shared_ptr<Airlink::ISender> sender = std::make_shared<Airlink::UDPSender>(udpAddress, udpPort);
+    std::shared_ptr<Airlink::ISender> sender = std::make_shared<Airlink::UDPSender>("127.0.0.1", udpPort);
     //------------------------------------------------------------------------------
     Airlink::ConfigurationClient client(apiURL, modemName, password);
     auto webrtcConfig = client.getConfiguration();

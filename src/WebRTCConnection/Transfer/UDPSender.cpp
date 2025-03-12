@@ -1,30 +1,33 @@
 #include "UDPSender.hpp"
 
+
+
 namespace Airlink {
 
-UDPSender::UDPSender(QHostAddress address, size_t port) 
-    : ISender()
+UDPSender::UDPSender(std::string_view address, size_t port) 
+    : ISender()    
+    , serverAddress(std::make_unique<Poco::Net::SocketAddress>(address.data(), port))
+    , socket(std::make_unique<Poco::Net::DatagramSocket>())
     , address(address)
-    , port(port)
+    , port(port) 
 {
-    //socket.bind(address, port);
+
 }
 
 void UDPSender::sendData(std::vector<uint8_t>& data) {
-    socket.writeDatagram(QByteArray(reinterpret_cast<const char*>(data.data()), data.size()), address, port);
+    socket->sendTo(data.data(), data.size(), *serverAddress);
 }
 
 void UDPSender::sendData(std::vector<uint8_t>&& data) {
-    socket.writeDatagram(QByteArray(reinterpret_cast<const char*>(data.data()), data.size()), address, port);
-    socket.waitForBytesWritten(100);
+    socket->sendTo(data.data(), data.size(), *serverAddress);
 }
 
 void UDPSender::sendData(std::vector<uint8_t>& data) const {
-    //socket.writeDatagram(QByteArray(reinterpret_cast<const char*>(data.data()), data.size()), address, port);
+    socket->sendTo(data.data(), data.size(), *serverAddress);
 }
 
 void UDPSender::sendData(std::vector<uint8_t>&& data) const {
-    //socket.writeDatagram(QByteArray(reinterpret_cast<const char*>(data.data()), data.size()), address, port);
+    socket->sendTo(data.data(), data.size(), *serverAddress);
 }
 
 } //Airlink

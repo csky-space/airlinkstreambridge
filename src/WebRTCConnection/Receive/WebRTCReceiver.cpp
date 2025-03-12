@@ -9,7 +9,6 @@
 #include <variant>
 #include <vector>
 #include <thread>
-#include <mutex>
 
 #include <rtc/track.hpp>
 #include <rtc/datachannel.hpp>
@@ -38,9 +37,7 @@ namespace Airlink {
     , parser()
     , config(std::make_unique<rtc::Configuration>())
 {
-    rtc::WebSocketConfiguration wsConfig;
-    wsConfig.connectionTimeout = std::chrono::duration<uint32_t>(30);
-    ws = std::make_shared<rtc::WebSocket>(wsConfig);
+    
     connectToSignallingServer();
 }
 
@@ -127,6 +124,9 @@ void WebRTCReceiver::connectWebRtc() {
 }
 
 void WebRTCReceiver::connectToSignallingServer() {
+    rtc::WebSocketConfiguration wsConfig;
+    wsConfig.connectionTimeout = std::chrono::duration<uint32_t>(30);
+    ws = std::make_shared<rtc::WebSocket>(wsConfig);
     for(const auto& serverConfig : webrtcConfig.stunServerConfigs) {
         config->iceServers.emplace_back(serverConfig.url);
     }
@@ -167,7 +167,7 @@ void WebRTCReceiver::createPeerConnection() {
             state == rtc::PeerConnection::State::Closed) {
                 std::cout << "State: " << state << std::endl;
                 if(failed) {
-                    std::this_thread::sleep_for(failedTimeout);
+                    std::this_thread::sleep_for(15000ms);
                     std::cout << "ping\n";
                     ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
                     failed = false;

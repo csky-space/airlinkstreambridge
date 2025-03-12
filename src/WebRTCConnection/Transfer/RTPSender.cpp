@@ -1,7 +1,6 @@
 #include "RTPSender.hpp"
 #include "uvgrtp/util.hh"
 
-#include <cstddef>
 #include <uvgrtp/lib.hh>
 
 namespace Airlink {

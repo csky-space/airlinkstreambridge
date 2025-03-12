@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(SIMDJSON_SINGLE_HEADER_DIR external/libs/simdjson/singleheader)
 set(LIBSDPTRANSFORM_DIR external/libs/libsdptransform)
 
-
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     add_compile_options(-Wall -Wextra)
     add_compile_options(-Wno-format-truncation)
@@ -20,11 +19,6 @@ foreach(SUBPROJECT_PATH ${SUBPROJECT_PATHS})
     endif()
 endforeach()
 
-find_package(Qt6 COMPONENTS REQUIRED Network)
-
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-
 file(GLOB_RECURSE WEBRTC_TO_RTP_SOURCES src/*.cpp)
 file(GLOB_RECURSE WEBRTC_TO_RTP_HEADERS src/*.h)
 
@@ -36,8 +30,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE WEBRTC_POSIX SIMDJSON_HEADER_
 file(GLOB LIB_SDP_TRANSFORM_SOURCES ${LIBSDPTRANSFORM_DIR}/src/*.cpp)
 target_sources(${PROJECT_NAME} PRIVATE ${WEBRTC_TO_RTP_HEADERS} ${WEBRTC_TO_RTP_SOURCES} ${SIMDJSON_SINGLE_HEADER_DIR}/simdjson.cpp ${LIB_SDP_TRANSFORM_SOURCES})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE uvgrtp datachannel cpprest CLI11::CLI11)
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Network)
+target_link_libraries(${PROJECT_NAME} PRIVATE uvgrtp datachannel CLI11::CLI11 Poco::Net)
 
 
 

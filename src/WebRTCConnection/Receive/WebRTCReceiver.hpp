@@ -1,7 +1,6 @@
 #ifndef WEBRTC_RECEIVER_HPP
 #define WEBRTC_RECEIVER_HPP
 
-#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string_view>
@@ -66,7 +65,6 @@ private:
     
     std::string lastSDP = "";
     
-    std::chrono::duration<long double, std::milli> failedTimeout = 5000ms;
     bool failed = false;
 };
 
