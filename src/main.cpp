@@ -26,11 +26,13 @@ int main(int argc, char **argv) {
 	std::string password;
 	std::vector<std::string> modemNames;
 	size_t udpPort = 5000;
+	std::string sessionId = "4221";
 
 	app.add_option("-a,--api-url", apiURL, "provide the api server url for a getting configuration");
 	app.add_option("-m,--modem-name", modemName, "provide the Air-link modem name");
 	app.add_option("-p,--password", password, "provide a password for the authorization");
 	app.add_option("-s,--stream-port", udpPort, "The bridge will streams to this port. It doesn't work yet");
+	app.add_option("--session-id", sessionId, "Peer connection id");
 
 	// for multi modems support
 	// app.add_option("-mn", modemNames, "modem-names");
@@ -42,6 +44,7 @@ int main(int argc, char **argv) {
 	Airlink::ConfigurationClient client(apiURL, modemName, password);
 	auto webrtcConfig = client.getConfiguration();
 	webrtcConfig.wsUrl += std::string("?name=GS") + modemName + "&partnerName=" + modemName;
+	webrtcConfig.sessionId = sessionId;
 	std::shared_ptr<Airlink::IReceiver> receiver = std::make_shared<Airlink::WebRTCReceiver>(std::move(webrtcConfig));
 
 	receiver->onData([sender](std::vector<uint8_t> &&videoMessage) { sender->sendData(videoMessage); });

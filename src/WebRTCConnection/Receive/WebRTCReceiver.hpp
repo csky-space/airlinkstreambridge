@@ -29,7 +29,8 @@ namespace Airlink {
 
 class WebRTCReceiver : public IReceiver {
   public:
-	WebRTCReceiver(const std::vector<IceServerConfig> &stunServerConfigs, const std::vector<IceServerConfig> &turnServerConfigs, std::string_view signalUrl);
+	WebRTCReceiver(const std::vector<IceServerConfig> &stunServerConfigs, const std::vector<IceServerConfig> &turnServerConfigs, std::string_view signalUrl,
+				   std::string_view sessionId);
 	explicit WebRTCReceiver(WebrtcConfiguration &&configuration) noexcept;
 	~WebRTCReceiver();
 

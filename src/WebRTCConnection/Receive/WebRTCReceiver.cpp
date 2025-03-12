@@ -23,14 +23,13 @@
 
 #include <sdptransform.hpp>
 
-#define VIRTUAL_ID "4221"
-
 using std::chrono_literals::operator""ms;
 
 namespace Airlink {
 WebRTCReceiver::WebRTCReceiver(const std::vector<IceServerConfig> &stunServerConfigs, const std::vector<IceServerConfig> &turnServerConfigs,
-							   std::string_view signalUrl)
-	: IReceiver(), wsUrl(signalUrl), webrtcConfig{stunServerConfigs, turnServerConfigs, signalUrl.data()}, config(std::make_unique<rtc::Configuration>()) {
+							   std::string_view signalUrl, std::string_view sessionId)
+	: IReceiver(), wsUrl(signalUrl), webrtcConfig{stunServerConfigs, turnServerConfigs, signalUrl.data(), sessionId.data()},
+	  config(std::make_unique<rtc::Configuration>()) {
 
 	connectToSignallingServer();
 }
@@ -67,28 +66,29 @@ void WebRTCReceiver::onWsMessage(const nlohmann::json &message) {
 	std::cout << "parsed on message\n";
 
 	auto idResult = message.find("id");
-	if (idResult != message.end()) {
+	std::cout << "message is: " << message.dump() << '\n' << std::flush;
+	if (idResult == message.cend()) {
 		return;
 	}
 
-	std::string id(idResult->dump());
+	std::string id(idResult.value());
 
 	auto typeResult = message.find("type");
-	if (typeResult != message.end()) {
+	if (typeResult == message.cend()) {
 		return;
 	}
 
-	std::string type(typeResult->dump());
+	std::string type(typeResult.value());
 
 	if (type == "ping") {
 		std::cout << "send request\n";
-		ws->send(json{{"id", VIRTUAL_ID}, {"type", "request"}}.dump());
+		ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "request"}}.dump());
 	}
 
 	if (type == "offer") {
 		std::cout << "offer\n";
 
-		lastSDP = message["sdp"].dump();
+		lastSDP = message["sdp"];
 		createPeerConnection();
 	}
 }
@@ -112,7 +112,7 @@ void WebRTCReceiver::connectToSignallingServer() {
 	config->disableAutoNegotiation = true;
 	ws->onOpen([this]() {
 		std::cout << "ping\n";
-		ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
+		ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
 	});
 
 	ws->onClosed([]() { std::cout << "WebSocket closed" << std::endl; });
@@ -140,7 +140,7 @@ void WebRTCReceiver::createPeerConnection() {
 			if (failed) {
 				std::this_thread::sleep_for(15000ms);
 				std::cout << "ping\n";
-				ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
+				ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
 				failed = false;
 			}
 		}
@@ -155,7 +155,7 @@ void WebRTCReceiver::createPeerConnection() {
 
 				auto description = peerConnection->localDescription();
 				std::cout << "description type is " << description->typeString() << '\n';
-				json message = {{"id", VIRTUAL_ID}, {"type", description->typeString()}, {"sdp", description.value()}};
+				json message = {{"id", webrtcConfig.sessionId}, {"type", description->typeString()}, {"sdp", description.value()}};
 
 				std::cout << "localDescription is: " << message.dump(0) << '\n';
 				ws->send(message.dump());
