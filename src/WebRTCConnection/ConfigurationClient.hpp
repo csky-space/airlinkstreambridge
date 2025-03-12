@@ -1,43 +1,43 @@
 #ifndef CONFIGURATION_CLIENT_HPP
 #define CONFIGURATION_CLIENT_HPP
 
+#include <memory>
 #include <string>
 #include <string_view>
-#include <memory>
 
 #include <Poco/Net/HTTPSClientSession.h>
 #include <Poco/URI.h>
-
 
 #include "WebrtcConfig.hpp"
 
 namespace Airlink {
 
 class ConfigurationClient {
-public:
-    ConfigurationClient(std::string_view configurationServerUrl, std::string_view login, std::string_view password);
-    WebrtcConfiguration getConfiguration() const;
-private:
-    void requestToLogin();
-    void requestToConfig();
+  public:
+	ConfigurationClient(std::string_view configurationServerUrl, std::string_view login, std::string_view password);
+	WebrtcConfiguration getConfiguration() const;
 
-    void parseLogin();
+  private:
+	void requestToLogin();
+	void requestToConfig();
 
-    Poco::Net::HTTPSClientSession session;
-    Poco::Net::Context::Ptr pContext;
+	void parseLogin();
 
-    Poco::URI apiURI;
+	Poco::Net::HTTPSClientSession session;
+	Poco::Net::Context::Ptr pContext;
 
-    std::string accessToken;
-    
-    WebrtcConfiguration configuration;
+	Poco::URI apiURI;
 
-    std::string hostUrl;
-    std::string login;
-    std::string password;
-    std::string queryPrefix = "/api/groundStation";
+	std::string accessToken;
+
+	WebrtcConfiguration configuration;
+
+	std::string hostUrl;
+	std::string login;
+	std::string password;
+	std::string queryPrefix = "/api/groundStation";
 };
 
-}
+} // namespace Airlink
 
 #endif

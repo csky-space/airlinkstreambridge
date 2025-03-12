@@ -8,11 +8,11 @@
 namespace Airlink {
 
 struct WebrtcConfiguration {
-    std::vector<IceServerConfig>    stunServerConfigs; 
-    std::vector<IceServerConfig>    turnServersConfigs; 
-    std::string                     wsUrl;
+	std::vector<IceServerConfig> stunServerConfigs;
+	std::vector<IceServerConfig> turnServersConfigs;
+	std::string wsUrl;
 };
 
-}
+} // namespace Airlink
 
 #endif

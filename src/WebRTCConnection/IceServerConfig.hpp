@@ -6,11 +6,11 @@
 namespace Airlink {
 
 struct IceServerConfig {
-    std::string url;
-    std::string login;
-    std::string password;
+	std::string url;
+	std::string login;
+	std::string password;
 };
 
-}
+} // namespace Airlink
 
 #endif

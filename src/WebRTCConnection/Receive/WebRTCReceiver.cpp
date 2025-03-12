@@ -6,213 +6,183 @@
 #include <iostream>
 #include <memory>
 #include <ostream>
+#include <thread>
 #include <variant>
 #include <vector>
-#include <thread>
 
-#include <rtc/track.hpp>
+#include <rtc/common.hpp>
+#include <rtc/configuration.hpp>
 #include <rtc/datachannel.hpp>
 #include <rtc/description.hpp>
-#include <rtc/configuration.hpp>
-#include <rtc/websocket.hpp>
-#include <rtc/peerconnection.hpp>
-#include <rtc/mediahandler.hpp>
-#include <rtc/rtcpreceivingsession.hpp>
-#include <rtc/common.hpp>
 #include <rtc/h265rtppacketizer.hpp>
+#include <rtc/mediahandler.hpp>
+#include <rtc/peerconnection.hpp>
+#include <rtc/rtcpreceivingsession.hpp>
+#include <rtc/track.hpp>
+#include <rtc/websocket.hpp>
 
 #include <sdptransform.hpp>
-
-#include <simdjson.h>
 
 #define VIRTUAL_ID "4221"
 
 using std::chrono_literals::operator""ms;
 
 namespace Airlink {
-    WebRTCReceiver::WebRTCReceiver(const std::vector<IceServerConfig>& stunServerConfigs, const std::vector<IceServerConfig>& turnServerConfigs, std::string_view signalUrl)
-    : IReceiver()
-    , wsUrl(signalUrl)
-    , webrtcConfig{stunServerConfigs, turnServerConfigs, signalUrl.data()}
-    , config(std::make_unique<rtc::Configuration>())
-{
-    
-    connectToSignallingServer();
+WebRTCReceiver::WebRTCReceiver(const std::vector<IceServerConfig> &stunServerConfigs, const std::vector<IceServerConfig> &turnServerConfigs,
+							   std::string_view signalUrl)
+	: IReceiver(), wsUrl(signalUrl), webrtcConfig{stunServerConfigs, turnServerConfigs, signalUrl.data()}, config(std::make_unique<rtc::Configuration>()) {
+
+	connectToSignallingServer();
 }
 
-WebRTCReceiver::WebRTCReceiver(WebrtcConfiguration&& configuration) noexcept 
-    : IReceiver()
-    , wsUrl(configuration.wsUrl)
-    , ws(std::make_shared<rtc::WebSocket>())
-    , webrtcConfig(configuration)
-    , config(std::make_unique<rtc::Configuration>())
-{
-    connectToSignallingServer();
+WebRTCReceiver::WebRTCReceiver(WebrtcConfiguration &&configuration) noexcept
+	: IReceiver(), wsUrl(configuration.wsUrl), ws(std::make_shared<rtc::WebSocket>()), webrtcConfig(configuration),
+	  config(std::make_unique<rtc::Configuration>()) {
+	connectToSignallingServer();
 }
 
-WebRTCReceiver::~WebRTCReceiver() {
-    
-}
+WebRTCReceiver::~WebRTCReceiver() {}
 
-bool WebRTCReceiver::isOpened() {
-    return ws->isOpen();
-}
+bool WebRTCReceiver::isOpened() { return ws->isOpen(); }
 
-bool WebRTCReceiver::isOpened() const {
-    return ws->isOpen();
-}
+bool WebRTCReceiver::isOpened() const { return ws->isOpen(); }
 
-bool WebRTCReceiver::isClosed() {
-    return ws->isClosed();
-}
+bool WebRTCReceiver::isClosed() { return ws->isClosed(); }
 
-bool WebRTCReceiver::isClosed() const {
-    return ws->isClosed();
-}
+bool WebRTCReceiver::isClosed() const { return ws->isClosed(); }
 
 void WebRTCReceiver::waitForConnection() {
-    while (!isOpened()) {
+	while (!isOpened()) {
 		if (isClosed())
 			break;
 		std::this_thread::sleep_for(100ms);
 	}
 }
 
-void WebRTCReceiver::onData(const std::function<void(std::vector<uint8_t>&&)>& onVideoMessageAction) {
-    this->onVideoMessageAction = onVideoMessageAction;
-}
+void WebRTCReceiver::onData(const std::function<void(std::vector<uint8_t> &&)> &onVideoMessageAction) { this->onVideoMessageAction = onVideoMessageAction; }
 
-void WebRTCReceiver::onUpdate() {
-    
-}
+void WebRTCReceiver::onUpdate() {}
 
-void WebRTCReceiver::onWsMessage(const nlohmann::json& message) {
-    std::cout << "parsed on message\n";
+void WebRTCReceiver::onWsMessage(const nlohmann::json &message) {
+	std::cout << "parsed on message\n";
 
-    auto idResult = message.find("id");
-    if(idResult != message.end()) {
-        return;
-    }
+	auto idResult = message.find("id");
+	if (idResult != message.end()) {
+		return;
+	}
 
-    std::string id(idResult->dump());
+	std::string id(idResult->dump());
 
+	auto typeResult = message.find("type");
+	if (typeResult != message.end()) {
+		return;
+	}
 
-    auto typeResult = message.find("type");
-    if(typeResult != message.end()) {
-        return;
-    }
+	std::string type(typeResult->dump());
 
-    std::string type(typeResult->dump());
-
-    if (type == "ping") {
-        std::cout << "send request\n";
-        ws->send(json{{"id", VIRTUAL_ID}, {"type", "request"}}.dump());
+	if (type == "ping") {
+		std::cout << "send request\n";
+		ws->send(json{{"id", VIRTUAL_ID}, {"type", "request"}}.dump());
 	}
 
 	if (type == "offer") {
 		std::cout << "offer\n";
 
-        lastSDP = message["sdp"].dump();
-        createPeerConnection();
+		lastSDP = message["sdp"].dump();
+		createPeerConnection();
 	}
 }
 
-void WebRTCReceiver::connectWebRtc() {
-    connectToSignallingServer();
-}
+void WebRTCReceiver::connectWebRtc() { connectToSignallingServer(); }
 
 void WebRTCReceiver::connectToSignallingServer() {
-    rtc::WebSocketConfiguration wsConfig;
-    wsConfig.connectionTimeout = std::chrono::duration<uint32_t>(30);
-    ws = std::make_shared<rtc::WebSocket>(wsConfig);
-    for(const auto& serverConfig : webrtcConfig.stunServerConfigs) {
-        config->iceServers.emplace_back(serverConfig.url);
-    }
-    for(const auto& serverConfig : webrtcConfig.turnServersConfigs) {
-        rtc::IceServer server(serverConfig.url);
-        server.username = serverConfig.login;
-        server.password = serverConfig.password;
-        config->iceServers.push_back(server);
-    }
+	rtc::WebSocketConfiguration wsConfig;
+	wsConfig.connectionTimeout = std::chrono::duration<uint32_t>(30);
+	ws = std::make_shared<rtc::WebSocket>(wsConfig);
+	for (const auto &serverConfig : webrtcConfig.stunServerConfigs) {
+		config->iceServers.emplace_back(serverConfig.url);
+	}
+	for (const auto &serverConfig : webrtcConfig.turnServersConfigs) {
+		rtc::IceServer server(serverConfig.url);
+		server.username = serverConfig.login;
+		server.password = serverConfig.password;
+		config->iceServers.push_back(server);
+	}
 
-    config->disableAutoNegotiation = true;
-    ws->onOpen([this](){
-        std::cout << "ping\n";
-        ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
-    });
+	config->disableAutoNegotiation = true;
+	ws->onOpen([this]() {
+		std::cout << "ping\n";
+		ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
+	});
 
-    ws->onClosed([]() { std::cout << "WebSocket closed" << std::endl; });
+	ws->onClosed([]() { std::cout << "WebSocket closed" << std::endl; });
 
 	ws->onError([](const std::string &error) { std::cout << "WebSocket failed: " << error << std::endl; });
 
 	ws->onMessage([&](std::variant<rtc::binary, std::string> data) {
 		if (!std::get_if<std::string>(&data)) {
-            std::cout << "unsupported message\n";
-            return;
-        }
-        nlohmann::json message = nlohmann::json::parse(std::get<std::string>(data));
-        onWsMessage(message);
+			std::cout << "unsupported message\n";
+			return;
+		}
+		nlohmann::json message = nlohmann::json::parse(std::get<std::string>(data));
+		onWsMessage(message);
 	});
 
-    ws->open(wsUrl);
+	ws->open(wsUrl);
 }
 
 void WebRTCReceiver::createPeerConnection() {
-    peerConnection = std::make_unique<rtc::PeerConnection>(*config);
-            
-    peerConnection->onStateChange([this](rtc::PeerConnection::State state){
-        if (state == rtc::PeerConnection::State::Disconnected || state == rtc::PeerConnection::State::Failed ||
-            state == rtc::PeerConnection::State::Closed) {
-                std::cout << "State: " << state << std::endl;
-                if(failed) {
-                    std::this_thread::sleep_for(15000ms);
-                    std::cout << "ping\n";
-                    ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
-                    failed = false;
-                }
+	peerConnection = std::make_unique<rtc::PeerConnection>(*config);
 
-            }
-        if(state == rtc::PeerConnection::State::Failed) {
-            failed = true;
-        }
-                
-    });
-    peerConnection->onGatheringStateChange([this](rtc::PeerConnection::GatheringState state){
-        if (state == rtc::PeerConnection::GatheringState::Complete) {
-            if (peerConnection) {
-                std::cout << "gathering complete\n";
-                        
-                auto description = peerConnection->localDescription();
-                std::cout << "description type is " << description->typeString() << '\n';
-                json message = {{"id", VIRTUAL_ID}, {"type", description->typeString()}, {"sdp", description.value()}};
+	peerConnection->onStateChange([this](rtc::PeerConnection::State state) {
+		if (state == rtc::PeerConnection::State::Disconnected || state == rtc::PeerConnection::State::Failed || state == rtc::PeerConnection::State::Closed) {
+			std::cout << "State: " << state << std::endl;
+			if (failed) {
+				std::this_thread::sleep_for(15000ms);
+				std::cout << "ping\n";
+				ws->send(json{{"id", VIRTUAL_ID}, {"type", "ping"}}.dump());
+				failed = false;
+			}
+		}
+		if (state == rtc::PeerConnection::State::Failed) {
+			failed = true;
+		}
+	});
+	peerConnection->onGatheringStateChange([this](rtc::PeerConnection::GatheringState state) {
+		if (state == rtc::PeerConnection::GatheringState::Complete) {
+			if (peerConnection) {
+				std::cout << "gathering complete\n";
 
-                std::cout << "localDescription is: " << message.dump(0) << '\n';
-                ws->send(message.dump());
-            }
-        }
-    });
+				auto description = peerConnection->localDescription();
+				std::cout << "description type is " << description->typeString() << '\n';
+				json message = {{"id", VIRTUAL_ID}, {"type", description->typeString()}, {"sdp", description.value()}};
 
-    peerConnection->onTrack([this](std::shared_ptr<rtc::Track> track){
-        if(track->description().type() == "video") {
-            this->track = track;
-            std::cout << "adding a track\n";
+				std::cout << "localDescription is: " << message.dump(0) << '\n';
+				ws->send(message.dump());
+			}
+		}
+	});
 
-            track->onMessage([this](std::variant<rtc::binary, std::string> data){                        
-                rtc::binary bytedData = std::get<rtc::binary>(data);
-                std::vector<uint8_t> vData;
-                vData.resize(bytedData.size());
-                std::memcpy(vData.data(), bytedData.data(),  bytedData.size());
-                if(onVideoMessageAction)
-                    onVideoMessageAction(std::move(vData));
-            });
-        }
-                
-    });
+	peerConnection->onTrack([this](std::shared_ptr<rtc::Track> track) {
+		if (track->description().type() == "video") {
+			this->track = track;
+			std::cout << "adding a track\n";
 
-    rtc::Description description(lastSDP, "offer");
-    peerConnection->setRemoteDescription(description);
+			track->onMessage([this](std::variant<rtc::binary, std::string> data) {
+				rtc::binary bytedData = std::get<rtc::binary>(data);
+				std::vector<uint8_t> vData;
+				vData.resize(bytedData.size());
+				std::memcpy(vData.data(), bytedData.data(), bytedData.size());
+				if (onVideoMessageAction)
+					onVideoMessageAction(std::move(vData));
+			});
+		}
+	});
 
-    peerConnection->setLocalDescription();
+	rtc::Description description(lastSDP, "offer");
+	peerConnection->setRemoteDescription(description);
+
+	peerConnection->setLocalDescription();
 }
 
-} //Airlink
+} // namespace Airlink
