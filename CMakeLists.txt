@@ -46,7 +46,7 @@ target_sources(${PROJECT_NAME} PRIVATE ${WEBRTC_TO_RTP_HEADERS} ${WEBRTC_TO_RTP_
 
 target_link_libraries(${PROJECT_NAME} 
     PRIVATE 
-    uvgrtp datachannel CLI11::CLI11 Poco::Net Poco::NetSSL nlohmann_json::nlohmann_json
+    datachannel CLI11::CLI11 Poco::Net Poco::NetSSL nlohmann_json::nlohmann_json
     )
 
 

@@ -1,6 +1,3 @@
-[submodule "external/libs/uvgRTP"]
-	path = external/libs/uvgRTP
-	url = https://github.com/ultravideo/uvgRTP.git
 [submodule "external/libs/libdatachannel"]
 	path = external/libs/libdatachannel
 	url = https://github.com/paullouisageneau/libdatachannel.git
