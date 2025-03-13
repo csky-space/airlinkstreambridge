@@ -7,7 +7,7 @@
 #include <memory>
 #include <string_view>
 
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 
 #include "../WebrtcConfig.hpp"
 #include "IReceiver.hpp"

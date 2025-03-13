@@ -13,3 +13,6 @@
 [submodule "external/libs/poco"]
 	path = external/libs/poco
 	url = https://github.com/pocoproject/poco.git
+[submodule "external/libs/nlohmann_json"]
+	path = external/libs/nlohmann_json
+	url = https://github.com/nlohmann/json.git
