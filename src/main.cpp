@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
 	std::string modemName;
 	std::string password;
 	std::vector<std::string> modemNames;
-	size_t udpPort = 5000;
+	size_t udpPort = 9050;
 	std::string sessionId = "4221";
 
 	app.add_option("-a,--api-url", apiURL, "provide the api server url for a getting configuration");
@@ -33,11 +33,12 @@ int main(int argc, char **argv) {
 	app.add_option("-p,--password", password, "provide a password for the authorization");
 	app.add_option("-s,--stream-port", udpPort, "The bridge will streams to this port. It doesn't work yet");
 	app.add_option("--session-id", sessionId, "Peer connection id");
-
+	
 	// for multi modems support
 	// app.add_option("-mn", modemNames, "modem-names");
 
 	CLI11_PARSE(app, argc, argv);
+	std::cout << "port: " << udpPort << '\n';
 	//==============================================================================
 	std::shared_ptr<Airlink::ISender> sender = std::make_shared<Airlink::UDPSender>("127.0.0.1", udpPort);
 	//------------------------------------------------------------------------------
