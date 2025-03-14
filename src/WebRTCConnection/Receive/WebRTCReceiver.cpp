@@ -61,19 +61,13 @@ void WebRTCReceiver::waitForConnection() {
 void WebRTCReceiver::onData(const std::function<void(std::vector<uint8_t> &&)> &onVideoMessageAction) { this->onVideoMessageAction = onVideoMessageAction; }
 
 void WebRTCReceiver::onUpdate() {
-	// if(dataChannel && dataChannel->isOpen())
-	//	dataChannel->send("ping");
-	if(trackDataTimeout.elapsed<std::chrono::milliseconds>() > 2000) {
+	if(trackDataTimeout.elapsed<std::chrono::milliseconds>() > 5000) {
 		trackDataTimeout.stop();
 		peerConnection->close();
 		while(peerConnection->state() != rtc::PeerConnection::State::Closed) {}
 		std::cout << "ping\n";
 		ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
 	}
-	//if (peerConnection && (peerConnection->state() == rtc::PeerConnection::State::Failed)) {
-	//	std::cout << "ping\n";
-	//	ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
-	//}
 }
 
 void WebRTCReceiver::onWsMessage(const nlohmann::json &message) {
