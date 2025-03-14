@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
 
 	while (receiver->isOpened()) {
 		std::this_thread::sleep_for(100ms);
-		// receiver->onUpdate();
+		receiver->onUpdate();
 	}
 
 	return 0;

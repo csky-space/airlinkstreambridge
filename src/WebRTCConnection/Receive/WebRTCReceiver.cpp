@@ -60,7 +60,21 @@ void WebRTCReceiver::waitForConnection() {
 
 void WebRTCReceiver::onData(const std::function<void(std::vector<uint8_t> &&)> &onVideoMessageAction) { this->onVideoMessageAction = onVideoMessageAction; }
 
-void WebRTCReceiver::onUpdate() {}
+void WebRTCReceiver::onUpdate() {
+	// if(dataChannel && dataChannel->isOpen())
+	//	dataChannel->send("ping");
+	if(trackDataTimeout.elapsed<std::chrono::milliseconds>() > 2000) {
+		trackDataTimeout.stop();
+		peerConnection->close();
+		while(peerConnection->state() != rtc::PeerConnection::State::Closed) {}
+		std::cout << "ping\n";
+		ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
+	}
+	//if (peerConnection && (peerConnection->state() == rtc::PeerConnection::State::Failed)) {
+	//	std::cout << "ping\n";
+	//	ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
+	//}
+}
 
 void WebRTCReceiver::onWsMessage(const nlohmann::json &message) {
 	std::cout << "parsed on message\n";
@@ -135,8 +149,8 @@ void WebRTCReceiver::createPeerConnection() {
 	peerConnection = std::make_unique<rtc::PeerConnection>(*config);
 
 	peerConnection->onStateChange([this](rtc::PeerConnection::State state) {
+		std::cout << "State: " << state << std::endl;
 		if (state == rtc::PeerConnection::State::Disconnected || state == rtc::PeerConnection::State::Failed || state == rtc::PeerConnection::State::Closed) {
-			std::cout << "State: " << state << std::endl;
 			if (failed) {
 				std::this_thread::sleep_for(15000ms);
 				std::cout << "ping\n";
@@ -169,6 +183,7 @@ void WebRTCReceiver::createPeerConnection() {
 			std::cout << "adding a track\n";
 
 			track->onMessage([this](std::variant<rtc::binary, std::string> data) {
+				trackDataTimeout.restart();
 				rtc::binary bytedData = std::get<rtc::binary>(data);
 				std::vector<uint8_t> vData;
 				vData.resize(bytedData.size());
@@ -178,6 +193,16 @@ void WebRTCReceiver::createPeerConnection() {
 			});
 		}
 	});
+	// peerConnection->onDataChannel([this](std::shared_ptr<rtc::DataChannel> dataChannel){
+	//	this->dataChannel = dataChannel;
+	//	dataChannel->onOpen([dataChannel]() {
+	//
+	//	});
+	//
+	//	dataChannel->onMessage(nullptr, [dataChannel](std::string msg) {
+	//		std::cout << "received message from datachannel: " << msg << '\n';
+	//	});
+	// });
 
 	rtc::Description description(lastSDP, "offer");
 	peerConnection->setRemoteDescription(description);

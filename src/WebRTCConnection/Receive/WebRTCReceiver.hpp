@@ -9,6 +9,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "../../Tools/Timer.hpp"
 #include "../WebrtcConfig.hpp"
 #include "IReceiver.hpp"
 
@@ -67,6 +68,7 @@ class WebRTCReceiver : public IReceiver {
 	std::string lastSDP = "";
 
 	bool failed = false;
+	Timer trackDataTimeout;
 };
 
 } // namespace Airlink
