@@ -61,10 +61,11 @@ void WebRTCReceiver::waitForConnection() {
 void WebRTCReceiver::onData(const std::function<void(std::vector<uint8_t> &&)> &onVideoMessageAction) { this->onVideoMessageAction = onVideoMessageAction; }
 
 void WebRTCReceiver::onUpdate() {
-	if(trackDataTimeout.elapsed<std::chrono::milliseconds>() > 5000) {
+	if (trackDataTimeout.elapsed<std::chrono::milliseconds>() > 5000) {
 		trackDataTimeout.stop();
 		peerConnection->close();
-		while(peerConnection->state() != rtc::PeerConnection::State::Closed) {}
+		while (peerConnection->state() != rtc::PeerConnection::State::Closed) {
+		}
 		std::cout << "ping\n";
 		ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
 	}
@@ -187,16 +188,6 @@ void WebRTCReceiver::createPeerConnection() {
 			});
 		}
 	});
-	// peerConnection->onDataChannel([this](std::shared_ptr<rtc::DataChannel> dataChannel){
-	//	this->dataChannel = dataChannel;
-	//	dataChannel->onOpen([dataChannel]() {
-	//
-	//	});
-	//
-	//	dataChannel->onMessage(nullptr, [dataChannel](std::string msg) {
-	//		std::cout << "received message from datachannel: " << msg << '\n';
-	//	});
-	// });
 
 	rtc::Description description(lastSDP, "offer");
 	peerConnection->setRemoteDescription(description);
