@@ -3,6 +3,7 @@ cmake_policy(SET CMP0100 NEW)
 
 project(AirlinkStreamBridge LANGUAGES C CXX VERSION 1.0.0)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 
 set(LIBSDPTRANSFORM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/libs/libsdptransform)

@@ -61,13 +61,17 @@ void WebRTCReceiver::waitForConnection() {
 void WebRTCReceiver::onData(const std::function<void(std::vector<uint8_t> &&)> &onVideoMessageAction) { this->onVideoMessageAction = onVideoMessageAction; }
 
 void WebRTCReceiver::onUpdate() {
-	if (trackDataTimeout.elapsed<std::chrono::milliseconds>() > 5000) {
-		trackDataTimeout.stop();
-		peerConnection->close();
-		while (peerConnection->state() != rtc::PeerConnection::State::Closed) {
+	if ((trackDataTimeout.elapsed<std::chrono::milliseconds>() > 5000) || failed) {
+		if(peerConnection) {
+			peerConnection->close();
+			while (peerConnection->state() == rtc::PeerConnection::State::Connected) {
+				std::this_thread::sleep_for(1000ms);
+			}
+			reconnectPeer();
 		}
-		std::cout << "ping\n";
-		ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
+		else {
+			ping();
+		}
 	}
 }
 
@@ -90,15 +94,38 @@ void WebRTCReceiver::onWsMessage(const nlohmann::json &message) {
 	std::string type(typeResult.value());
 
 	if (type == "ping") {
+		failed = false;
 		std::cout << "send request\n";
 		ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "request"}}.dump());
+		trackDataTimeout.restart();
 	}
 
 	if (type == "offer") {
+		trackDataTimeout.restart();
 		std::cout << "offer\n";
 
 		lastSDP = message["sdp"];
 		createPeerConnection();
+	}
+}
+
+void WebRTCReceiver::ping() {
+	std::cout << "ping\n";
+	ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
+	trackDataTimeout.start();
+}
+
+void WebRTCReceiver::reconnectPeer() {
+	while(ws->isOpen() && ((peerConnection->state() != rtc::PeerConnection::State::Connected) && (peerConnection->state() != rtc::PeerConnection::State::Connecting))) {
+		reconnectTimer.start();
+		std::cout << "reconnecting\n";
+		ping(); //ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
+		while((peerConnection->state() != rtc::PeerConnection::State::Connected) && (peerConnection->state() != rtc::PeerConnection::State::Connecting)
+			&& (reconnectTimer.elapsed<std::chrono::milliseconds>() < 10000)) 
+		{
+			std::cout << "waiting for the connection. timer is " << reconnectTimer.elapsed<std::chrono::milliseconds>() << '\n';
+			std::this_thread::sleep_for(100ms);
+		}
 	}
 }
 
@@ -120,8 +147,7 @@ void WebRTCReceiver::connectToSignallingServer() {
 
 	config->disableAutoNegotiation = true;
 	ws->onOpen([this]() {
-		std::cout << "ping\n";
-		ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
+		ping();
 	});
 
 	ws->onClosed([]() { std::cout << "WebSocket closed" << std::endl; });
@@ -145,20 +171,15 @@ void WebRTCReceiver::createPeerConnection() {
 
 	peerConnection->onStateChange([this](rtc::PeerConnection::State state) {
 		std::cout << "State: " << state << std::endl;
-		if (state == rtc::PeerConnection::State::Disconnected || state == rtc::PeerConnection::State::Failed || state == rtc::PeerConnection::State::Closed) {
-			if (failed) {
-				std::this_thread::sleep_for(15000ms);
-				std::cout << "ping\n";
-				ws->send(json{{"id", webrtcConfig.sessionId}, {"type", "ping"}}.dump());
-				failed = false;
-			}
-		}
-		if (state == rtc::PeerConnection::State::Failed) {
+		if ((state == rtc::PeerConnection::State::Failed) || (state == rtc::PeerConnection::State::Disconnected) || (state == rtc::PeerConnection::State::Closed)) {
 			failed = true;
+		} else if((state == rtc::PeerConnection::State::Connecting) || (state == rtc::PeerConnection::State::Connected)) {
+			trackDataTimeout.stop();
 		}
 	});
 	peerConnection->onGatheringStateChange([this](rtc::PeerConnection::GatheringState state) {
 		if (state == rtc::PeerConnection::GatheringState::Complete) {
+			trackDataTimeout.restart();
 			if (peerConnection) {
 				std::cout << "gathering complete\n";
 
@@ -179,6 +200,7 @@ void WebRTCReceiver::createPeerConnection() {
 
 			track->onMessage([this](std::variant<rtc::binary, std::string> data) {
 				trackDataTimeout.restart();
+				std::cout << "on track message\n";
 				rtc::binary bytedData = std::get<rtc::binary>(data);
 				std::vector<uint8_t> vData;
 				vData.resize(bytedData.size());

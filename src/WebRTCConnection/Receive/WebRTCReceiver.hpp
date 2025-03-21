@@ -47,8 +47,10 @@ class WebRTCReceiver : public IReceiver {
 
   protected:
 	void onWsMessage(const nlohmann::json &message);
-
+	
   private:
+	void ping();
+  	void reconnectPeer();
 	void connectWebRtc();
 	void connectToSignallingServer();
 	void createPeerConnection();
@@ -68,7 +70,9 @@ class WebRTCReceiver : public IReceiver {
 	std::string lastSDP = "";
 
 	bool failed = false;
+	bool shouldBeReconnect = false;
 	Timer trackDataTimeout;
+	Timer reconnectTimer;
 };
 
 } // namespace Airlink
