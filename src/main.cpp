@@ -40,14 +40,14 @@ int main(int argc, char **argv) {
 	CLI11_PARSE(app, argc, argv);
 	std::cout << "port: " << udpPort << '\n';
 	//==============================================================================
-	std::shared_ptr<Airlink::ISender> sender = std::make_shared<Airlink::UDPSender>("127.0.0.1", udpPort);
+	
 	//------------------------------------------------------------------------------
 	Airlink::ConfigurationClient client(apiURL, modemName, password);
 	auto webrtcConfig = client.getConfiguration();
 	webrtcConfig.wsUrl += std::string("?name=GS") + modemName + "&partnerName=" + modemName;
 	webrtcConfig.sessionId = sessionId;
 	std::shared_ptr<Airlink::IReceiver> receiver = std::make_shared<Airlink::WebRTCReceiver>(std::move(webrtcConfig));
-
+	std::shared_ptr<Airlink::ISender> sender = std::make_shared<Airlink::UDPSender>("127.0.0.1", udpPort);
 	receiver->onData([sender](std::vector<uint8_t> &&videoMessage) { sender->sendData(videoMessage); });
 	//------------------------------------------------------------------------------
 

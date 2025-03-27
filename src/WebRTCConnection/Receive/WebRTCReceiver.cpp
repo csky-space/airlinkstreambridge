@@ -200,7 +200,6 @@ void WebRTCReceiver::createPeerConnection() {
 
 			track->onMessage([this](std::variant<rtc::binary, std::string> data) {
 				trackDataTimeout.restart();
-				std::cout << "on track message\n";
 				rtc::binary bytedData = std::get<rtc::binary>(data);
 				std::vector<uint8_t> vData;
 				vData.resize(bytedData.size());
