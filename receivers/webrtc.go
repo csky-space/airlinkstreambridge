@@ -49,10 +49,19 @@ type WebrtcReceiver struct {
 	udpSender       *net.UDPConn
 	iceConfigurator *iceconfigurator.ICEConfigurator
 
-	lastPacketTime time.Time
-	reconnectMutex sync.Mutex
-	isReconnecting bool
-	shutdownChan   chan struct{}
+	lastPacketTime      time.Time
+	reconnectMutex      sync.Mutex
+	transmitEnableMutex sync.Mutex
+	isReconnecting      bool
+	shutdownChan        chan struct{}
+	transmitEnabled     bool
+}
+
+func (wr *WebrtcReceiver) SetTransmitEnabled(enabled bool) {
+	wr.transmitEnableMutex.Lock()
+	defer wr.transmitEnableMutex.Unlock()
+
+	wr.transmitEnabled = enabled
 }
 
 func NewWebrtcReceiver(hostUrl string, login string, password string) *WebrtcReceiver {

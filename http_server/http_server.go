@@ -6,31 +6,44 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"log"
 	"math/big"
+	"myproject/receivers"
+	"net"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
 )
 
+type ConfigurationServerInput struct {
+	HostName  string `json:"hostName"`
+	ModemName string `json:"modemName"`
+	Password  string `json:"password"`
+}
+
 type http_server struct {
 	router    *mux.Router
 	tlsConfig *tls.Config
 	cert      tls.Certificate
+	wr        *receivers.WebrtcReceiver
+	listener  net.Listener
 }
 
 func rootHandle(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "You're at root")
 }
 
-func categoryHandle(w http.ResponseWriter, r *http.Request) {
+func (server *http_server) categoryHandle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	switch vars["category"] {
 	case "VideoFlowControl":
 		videoCategoryHandle(w, r)
+	case "Connection":
+		server.connectionCategoryHandle(w, r)
 	default:
 		fmt.Fprintf(w, "{\"err\":\"wrong category route\"}")
 	}
@@ -46,12 +59,46 @@ func videoCategoryHandle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func configurationServerCategoryHandle(w http.ResponseWriter, r *http.Request) {
+func (server *http_server) connectionCategoryHandle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	switch vars["method"] {
-	case "sendGroundStationCredentials":
+	case "open":
+		server.openHandle(w, r)
+	case "close":
+		server.closeHandle(w, r)
 	default:
 		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
+	}
+}
+
+func (server *http_server) openHandle(w http.ResponseWriter, r *http.Request) {
+	if server.wr == nil {
+		var reqJSON ConfigurationServerInput
+
+		err := json.NewDecoder(r.Body).Decode(&reqJSON)
+		if err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		go func() {
+			server.wr = receivers.NewWebrtcReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password)
+			defer server.wr.Close()
+			for server.wr.WsIsOpen() {
+				fmt.Println("ws is open")
+				time.Sleep(time.Millisecond * 1000)
+			}
+			server.wr = nil
+		}()
+	} else {
+		fmt.Fprintf(w, "{\"err\":\"webreceiver already opened. this call will be skip\"}")
+	}
+}
+
+func (server *http_server) closeHandle(w http.ResponseWriter, r *http.Request) {
+	if server.wr != nil {
+		server.wr.Close()
+		server.wr = nil
 	}
 }
 
@@ -99,9 +146,7 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 	return tls.X509KeyPair(certPEM, keyPEM)
 }
 
-func NewHttpServer() *http_server {
-	server := &http_server{}
-
+func (server *http_server) setupTLSServer() {
 	var err error
 	server.cert, err = generateSelfSignedCert()
 	if err != nil {
@@ -115,20 +160,29 @@ func NewHttpServer() *http_server {
 
 	server.router = mux.NewRouter()
 	server.router.HandleFunc("/", rootHandle).Methods("GET")
-	server.router.HandleFunc("/{category}/{method}", categoryHandle).Methods("GET", "POST", "PUT")
+	server.router.HandleFunc("/{category}/{method}", server.categoryHandle).Methods("GET", "POST", "PUT")
 
-	listener, err := tls.Listen("tcp", ":8443", server.tlsConfig)
+	server.listener, err = tls.Listen("tcp", ":8443", server.tlsConfig)
 	if err != nil {
 		log.Fatalf("TLS listener creation error: %v", err)
 	}
 
 	log.Println("HTTPS server has been started at https://localhost:8443")
-	go func() {
-		err := http.Serve(listener, server.router)
-		if err != nil {
-			log.Fatalf("HTTPS server error: %v", err)
-		}
-	}()
+}
+
+func (server *http_server) serve() {
+	err := http.Serve(server.listener, server.router)
+	if err != nil {
+		log.Fatalf("HTTPS server error: %v", err)
+	}
+}
+
+func NewHttpServer() *http_server {
+	server := &http_server{}
+
+	server.setupTLSServer()
+
+	go server.serve()
 
 	return server
 }
