@@ -349,8 +349,10 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 					log.Println("track marshal error:", err)
 					continue
 				}
+				if wr.transmitEnabled {
+					_, _ = wr.udpSender.Write(raw)
+				}
 
-				_, _ = wr.udpSender.Write(raw)
 			}
 		}
 	}()

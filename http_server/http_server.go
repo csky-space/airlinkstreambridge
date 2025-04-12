@@ -41,7 +41,7 @@ func (server *http_server) categoryHandle(w http.ResponseWriter, r *http.Request
 	vars := mux.Vars(r)
 	switch vars["category"] {
 	case "VideoFlowControl":
-		videoCategoryHandle(w, r)
+		server.videoCategoryHandle(w, r)
 	case "Connection":
 		server.connectionCategoryHandle(w, r)
 	default:
@@ -49,11 +49,13 @@ func (server *http_server) categoryHandle(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func videoCategoryHandle(w http.ResponseWriter, r *http.Request) {
+func (server *http_server) videoCategoryHandle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	switch vars["method"] {
 	case "startVideo":
+		server.startVideoHandle(w, r)
 	case "stopVideo":
+		server.stopVideoHandle(w, r)
 	default:
 		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
 	}
@@ -102,8 +104,16 @@ func (server *http_server) closeHandle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func startVideoHandle(w http.ResponseWriter, r *http.Request) {
+func (server *http_server) startVideoHandle(w http.ResponseWriter, r *http.Request) {
+	if server.wr != nil {
+		server.wr.SetTransmitEnabled(true)
+	}
+}
 
+func (server *http_server) stopVideoHandle(w http.ResponseWriter, r *http.Request) {
+	if server.wr != nil {
+		server.wr.SetTransmitEnabled(false)
+	}
 }
 
 func generateSelfSignedCert() (tls.Certificate, error) {
