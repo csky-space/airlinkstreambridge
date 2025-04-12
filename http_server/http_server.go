@@ -14,6 +14,7 @@ import (
 	"myproject/receivers"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -25,12 +26,25 @@ type ConfigurationServerInput struct {
 	Password  string `json:"password"`
 }
 
+type OutputProtocol struct {
+	Protocol string `json:"protocol"`
+}
+
+type UDPProtocol struct {
+	Protocol string `json:"protocol"`
+	Address  string `json:"address"`
+	Port     int    `json:"port"`
+}
+
 type http_server struct {
 	router    *mux.Router
 	tlsConfig *tls.Config
 	cert      tls.Certificate
 	wr        *receivers.WebrtcReceiver
 	listener  net.Listener
+
+	closeMut       sync.Mutex
+	shouldBeClosed bool
 }
 
 func rootHandle(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +58,10 @@ func (server *http_server) categoryHandle(w http.ResponseWriter, r *http.Request
 		server.videoCategoryHandle(w, r)
 	case "Connection":
 		server.connectionCategoryHandle(w, r)
+	case "App":
+		server.appCategoryHandle(w, r)
+	case "Output":
+		server.outputCategoryHandle(w, r)
 	default:
 		fmt.Fprintf(w, "{\"err\":\"wrong category route\"}")
 	}
@@ -56,6 +74,8 @@ func (server *http_server) videoCategoryHandle(w http.ResponseWriter, r *http.Re
 		server.startVideoHandle(w, r)
 	case "stopVideo":
 		server.stopVideoHandle(w, r)
+	case "isRunning":
+		server.videoIsRunningHandle(w, r)
 	default:
 		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
 	}
@@ -68,9 +88,57 @@ func (server *http_server) connectionCategoryHandle(w http.ResponseWriter, r *ht
 		server.openHandle(w, r)
 	case "close":
 		server.closeHandle(w, r)
+	case "isConnected":
+		server.isConnected(w, r)
 	default:
 		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
 	}
+}
+
+func (server *http_server) appCategoryHandle(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	switch vars["method"] {
+	case "close":
+		server.closeApp()
+	default:
+		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
+	}
+}
+
+func (server *http_server) outputCategoryHandle(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	switch vars["method"] {
+	case "setupProtocol":
+		server.setupOutputProtocolHandle(w, r)
+	default:
+		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
+	}
+}
+
+func (server *http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *http.Request) {
+	var protocol OutputProtocol
+
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&protocol)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	switch protocol.Protocol {
+	case "UDP":
+		var udpSetup UDPProtocol
+		udpErr := decoder.Decode(&udpSetup)
+		if udpErr != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		server.wr.SetupUDP(udpSetup.Address, udpSetup.Port)
+	default:
+		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
+
+	}
+	r.Body.Close()
 }
 
 func (server *http_server) openHandle(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +172,22 @@ func (server *http_server) closeHandle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type IsConnectedResponse struct {
+	IsConnected bool `json:"isConnected"`
+}
+
+func (server *http_server) isConnected(w http.ResponseWriter, r *http.Request) {
+	if server.wr != nil {
+		server.wr.IsConnected()
+	}
+
+	resp := IsConnectedResponse{
+		IsConnected: server.wr.IsConnected(),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
 func (server *http_server) startVideoHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.SetTransmitEnabled(true)
@@ -114,6 +198,18 @@ func (server *http_server) stopVideoHandle(w http.ResponseWriter, r *http.Reques
 	if server.wr != nil {
 		server.wr.SetTransmitEnabled(false)
 	}
+}
+
+func (server *http_server) videoIsRunningHandle(w http.ResponseWriter, r *http.Request) {
+	if server.wr != nil {
+		server.wr.IsConnected()
+	}
+
+	resp := IsConnectedResponse{
+		IsConnected: server.wr.VideoIsRunning(),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 func generateSelfSignedCert() (tls.Certificate, error) {
@@ -187,12 +283,24 @@ func (server *http_server) serve() {
 	}
 }
 
+func (server *http_server) closeApp() {
+	server.closeMut.Lock()
+	defer server.closeMut.Unlock()
+	server.shouldBeClosed = true
+}
+
 func NewHttpServer() *http_server {
 	server := &http_server{}
+	server.shouldBeClosed = false
+	return server
+}
 
+func (server *http_server) Loop() {
 	server.setupTLSServer()
 
 	go server.serve()
 
-	return server
+	for !server.shouldBeClosed {
+		time.Sleep(time.Second)
+	}
 }

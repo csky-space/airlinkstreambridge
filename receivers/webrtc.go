@@ -9,6 +9,7 @@ import (
 	"log"
 	"myproject/receivers/iceconfigurator"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -47,6 +48,8 @@ type WebrtcReceiver struct {
 	lastRemoteSdp   string
 	pc              *webrtc.PeerConnection
 	udpSender       *net.UDPConn
+	udpAddr         string
+	setUDPAddrMut   sync.Mutex
 	iceConfigurator *iceconfigurator.ICEConfigurator
 
 	lastPacketTime      time.Time
@@ -55,6 +58,32 @@ type WebrtcReceiver struct {
 	isReconnecting      bool
 	shutdownChan        chan struct{}
 	transmitEnabled     bool
+	videoIsRunning      bool
+}
+
+func (wr *WebrtcReceiver) VideoIsRunning() bool {
+	mut := sync.Mutex{}
+	mut.Lock()
+	defer mut.Unlock()
+	return wr.videoIsRunning
+}
+
+func (wr *WebrtcReceiver) IsConnected() bool {
+	return wr.pc.ConnectionState() == webrtc.PeerConnectionStateConnected
+}
+
+func (wr *WebrtcReceiver) SetupUDP(address string, port int) {
+	wr.setUDPAddrMut.Lock()
+	defer wr.setUDPAddrMut.Unlock()
+	wr.udpAddr = address + ":" + strconv.Itoa(port)
+	serverAddr, err := net.ResolveUDPAddr("udp", wr.udpAddr)
+	if err != nil {
+		panic(err)
+	}
+	wr.udpSender, err = net.DialUDP("udp", nil, serverAddr)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (wr *WebrtcReceiver) SetTransmitEnabled(enabled bool) {
@@ -330,10 +359,12 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 		for {
 			select {
 			case <-wr.shutdownChan:
+				wr.videoIsRunning = false
 				return
 			default:
 				pkt, _, err := track.ReadRTP()
 				if err != nil {
+					wr.videoIsRunning = false
 					log.Printf("ReadRTP error: %v", err)
 					wr.relaunchPeer()
 					return
@@ -343,6 +374,7 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 
 				raw, err := pkt.Marshal()
 				if err != nil {
+					wr.videoIsRunning = false
 					if errors.Is(err, io.EOF) {
 						return
 					}
@@ -350,7 +382,14 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 					continue
 				}
 				if wr.transmitEnabled {
-					_, _ = wr.udpSender.Write(raw)
+					wr.videoIsRunning = true
+					_, err = wr.udpSender.Write(raw)
+					if err != nil {
+						wr.videoIsRunning = false
+						fmt.Printf("raw %v didn't write with error: %s", raw, err)
+					}
+				} else {
+					wr.videoIsRunning = false
 				}
 
 			}
