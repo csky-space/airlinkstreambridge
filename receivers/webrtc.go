@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"myproject/receivers/iceconfigurator"
@@ -61,6 +60,18 @@ type WebrtcReceiver struct {
 	videoIsRunning      bool
 }
 
+type JSONRtcpFeedback struct {
+	Type      string `json:"type"`
+	Parameter string `json:"parameter"`
+}
+
+type JSONCodec struct {
+	Mime        string             `json:"mime"`
+	ClockRate   int                `json:"clockRate"`
+	PayloadType int                `json:"payloadType"`
+	Feedbacks   []JSONRtcpFeedback `json:"feedbacks"`
+}
+
 func (wr *WebrtcReceiver) VideoIsRunning() bool {
 	mut := sync.Mutex{}
 	mut.Lock()
@@ -93,6 +104,80 @@ func (wr *WebrtcReceiver) SetTransmitEnabled(enabled bool) {
 	wr.transmitEnabled = enabled
 }
 
+func (wr *WebrtcReceiver) registerDefaultCodecs() {
+	h265Codec := webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:  webrtc.MimeTypeH265,
+			ClockRate: 90000,
+			//SDPFmtpLine: "profile-level-id=42e01f;hevc-profile=1",
+			RTCPFeedback: []webrtc.RTCPFeedback{
+				{Type: "nack"},
+				{Type: "nack", Parameter: "pli"},
+				{Type: "transport-cc"},
+				{Type: "ccm", Parameter: "fir"},
+			},
+		}, PayloadType: 96,
+	}
+
+	opusCodec := webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType: webrtc.MimeTypeOpus,
+			RTCPFeedback: []webrtc.RTCPFeedback{
+				{Type: "nack"},
+				{Type: "nack", Parameter: "pli"},
+				{Type: "transport-cc"},
+				//{Type: "ccm", Parameter: "fir"},
+			},
+		}, PayloadType: 111,
+	}
+
+	if err := wr.mediaEngine.RegisterCodec(h265Codec, webrtc.RTPCodecTypeVideo); err != nil {
+		panic(err)
+	}
+
+	if err := wr.mediaEngine.RegisterCodec(opusCodec, webrtc.RTPCodecTypeAudio); err != nil {
+		panic(err)
+	}
+}
+
+func collectFeedback(feedbacks []JSONRtcpFeedback) []webrtc.RTCPFeedback {
+	result := []webrtc.RTCPFeedback{}
+	for feedbackNumber := 0; feedbackNumber < len(feedbacks); feedbackNumber++ {
+		feedback := feedbacks[feedbackNumber]
+		result = append(result, webrtc.RTCPFeedback{
+			Type:      feedback.Type,
+			Parameter: feedback.Parameter,
+		})
+	}
+
+	return result
+}
+
+func (wr *WebrtcReceiver) setupCodecs(codecs []JSONCodec) {
+	if codecs == nil {
+		wr.registerDefaultCodecs()
+	} else {
+		for codecNumber := 0; codecNumber < len(codecs); codecNumber++ {
+			rtcpFeedback := collectFeedback(codecs[codecNumber].Feedbacks)
+			codec := webrtc.RTPCodecParameters{
+
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:     codecs[codecNumber].Mime,
+					RTCPFeedback: rtcpFeedback,
+				},
+				PayloadType: webrtc.PayloadType(codecs[codecNumber].PayloadType),
+			}
+			if err := wr.mediaEngine.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
+func (wr *WebrtcReceiver) SetupCodecs(codecs []JSONCodec) {
+	wr.setupCodecs(codecs)
+}
+
 func NewWebrtcReceiver(hostUrl string, login string, password string) *WebrtcReceiver {
 	wr := &WebrtcReceiver{shutdownChan: make(chan struct{})}
 	//wr.packetReceived = make(chan struct{}, 1)
@@ -111,39 +196,7 @@ func NewWebrtcReceiver(hostUrl string, login string, password string) *WebrtcRec
 	})
 	//s.SetFireOnTrackBeforeFirstRTP(true)
 
-	h265Codec := webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{
-			MimeType:  webrtc.MimeTypeH265,
-			ClockRate: 90000,
-			//SDPFmtpLine: "profile-level-id=42e01f;hevc-profile=1",
-			RTCPFeedback: []webrtc.RTCPFeedback{
-				{Type: "nack"},
-				{Type: "nack", Parameter: "pli"},
-				{Type: "goog-remb"},
-				{Type: "ccm", Parameter: "fir"},
-			},
-		}, PayloadType: 96,
-	}
-
-	opusCodec := webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{
-			MimeType: webrtc.MimeTypeOpus,
-			RTCPFeedback: []webrtc.RTCPFeedback{
-				{Type: "nack"},
-				{Type: "nack", Parameter: "pli"},
-				{Type: "goog-remb"},
-				//{Type: "ccm", Parameter: "fir"},
-			},
-		}, PayloadType: 111,
-	}
-
-	if err := wr.mediaEngine.RegisterCodec(h265Codec, webrtc.RTPCodecTypeVideo); err != nil {
-		panic(err)
-	}
-
-	if err := wr.mediaEngine.RegisterCodec(opusCodec, webrtc.RTPCodecTypeAudio); err != nil {
-		panic(err)
-	}
+	wr.setupCodecs(nil)
 
 	interceptorRegistry := &interceptor.Registry{}
 
@@ -184,13 +237,13 @@ func (wr *WebrtcReceiver) readMessages() {
 	for {
 		_, message, err := wr.wsConn.ReadMessage()
 		if err != nil {
-			fmt.Println("Error during readiFng a message:", err)
+			log.Println("Error during readiFng a message:", err)
 			break
 		}
-		fmt.Printf("Received: %s\n", message)
+		log.Printf("Received: %s\n", message)
 		var data map[string]interface{}
 		if err := json.Unmarshal(message, &data); err != nil {
-			fmt.Println("Error during jsonify:", err)
+			log.Println("Error during jsonify:", err)
 			continue
 		}
 		msgType, ok := data["type"].(string)
@@ -211,7 +264,7 @@ func (wr *WebrtcReceiver) readMessages() {
 		case "candidate":
 			wr.onRemoteCandidate(data["candidate"].(string))
 		default:
-			fmt.Println("Error: Unknown message type:", msgType)
+			log.Println("Error: Unknown message type:", msgType)
 		}
 	}
 }
@@ -220,14 +273,14 @@ func (wr *WebrtcReceiver) ping() {
 	message := Ping{ID: id, Type: "ping"}
 	messageJSON, _ := json.Marshal(message)
 	wr.wsConn.WriteMessage(websocket.TextMessage, messageJSON)
-	fmt.Println(string(messageJSON))
+	log.Println(string(messageJSON))
 }
 
 func (wr *WebrtcReceiver) request() {
 	message := Request{ID: id, Type: "request"}
 	messageJSON, _ := json.Marshal(message)
 	wr.wsConn.WriteMessage(websocket.TextMessage, messageJSON)
-	fmt.Println(messageJSON)
+	log.Println(messageJSON)
 }
 
 func (wr *WebrtcReceiver) onOffer(sdp string) error {
@@ -254,7 +307,7 @@ func (wr *WebrtcReceiver) onOffer(sdp string) error {
 }
 
 func (wr *WebrtcReceiver) onRemoteCandidate(candidate string) error {
-	fmt.Printf("candidate: %s\n", candidate)
+	log.Printf("candidate: %s\n", candidate)
 	err := wr.pc.AddICECandidate(webrtc.ICECandidateInit{
 		Candidate: candidate,
 	})
@@ -288,10 +341,10 @@ func (wr *WebrtcReceiver) checkPacketTimeout() {
 			return
 		case <-ticker.C:
 			wr.reconnectMutex.Lock()
-			elapsed := time.Since(wr.lastPacketTime)
+			elapsed := time.Since(wr.lastPacketTime).Seconds()
 			wr.reconnectMutex.Unlock()
 
-			if elapsed > 5*time.Second {
+			if elapsed > (5 * time.Second).Seconds() {
 				log.Println("No RTP packets received for 5 seconds, restarting peer connection")
 				wr.relaunchPeer()
 				return
@@ -308,13 +361,11 @@ func (wr *WebrtcReceiver) relaunchPeer() {
 		return
 	}
 	wr.isReconnecting = true
-
+	wr.shutdownChan = make(chan struct{})
 	if wr.pc != nil {
 		wr.pc.Close()
 		wr.pc = nil
 	}
-
-	wr.shutdownChan = make(chan struct{})
 
 	go func() {
 		defer func() {
@@ -323,24 +374,30 @@ func (wr *WebrtcReceiver) relaunchPeer() {
 			wr.reconnectMutex.Unlock()
 		}()
 
+		startTime := time.Now()
 		timeout := time.After(10 * time.Second)
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 
+		<-wr.shutdownChan
+
+		wr.shutdownChan = make(chan struct{})
 		for {
 			select {
 			case <-ticker.C:
-				if wr.pc != nil {
+				log.Printf("Ms elapsed: %v", time.Since(startTime).Milliseconds())
+				if (wr.pc != nil) && (wr.pc.ConnectionState() == webrtc.PeerConnectionStateConnected) {
 					log.Println("PeerConnection reestablished")
-					return
 				}
-				wr.createPeerConnection()
+				return
 			case <-timeout:
 				log.Println("Reconnection timeout, retrying PeerConnection")
+				wr.pc.Close()
+				<-wr.shutdownChan
+				wr.shutdownChan = make(chan struct{})
+				timeout = time.After(10 * time.Second)
 				wr.createPeerConnection()
-				return
-			case <-wr.shutdownChan:
-				return
+				wr.ping()
 			}
 		}
 	}()
@@ -386,7 +443,7 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 					_, err = wr.udpSender.Write(raw)
 					if err != nil {
 						wr.videoIsRunning = false
-						fmt.Printf("raw %v didn't write with error: %s", raw, err)
+						log.Printf("raw %v didn't write with error: %s", raw, err)
 					}
 				} else {
 					wr.videoIsRunning = false
@@ -395,6 +452,47 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 			}
 		}
 	}()
+}
+
+func (wr *WebrtcReceiver) iceSetup() {
+
+	//pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+	//	if candidate == nil {
+	//		return
+	//	}
+	//	candidateInit := candidate.ToJSON()
+	//	candidateJSON := Candidate{
+	//		ID:        id,
+	//		Type:      "candidate",
+	//		Candidate: candidateInit.Candidate,
+	//	}
+	//	candidateJSONData, err := json.Marshal(candidateJSON)
+	//	if err != nil {
+	//		log.Printf("Candidate serialization problem: %v", err)
+	//		return
+	//	}
+	//	fmt.Printf("Candidate: %s\n", string(candidateJSONData))
+	//	wr.wsConn.WriteMessage(websocket.TextMessage, candidateJSONData)
+	//})
+	wr.pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
+		log.Printf("ICE Connection State changed: %s", state)
+
+	})
+
+	wr.pc.OnICEGatheringStateChange(func(state webrtc.ICEGatheringState) {
+		log.Printf("ICE Gathering State changed: %s\n", state)
+		if state == webrtc.ICEGatheringStateComplete {
+			answerJSON, _ := json.Marshal(Answer{
+				ID:   id,
+				Type: "answer",
+				SDP:  wr.pc.LocalDescription().SDP,
+			})
+			log.Printf("local desc is: %s", answerJSON)
+			if err := wr.wsConn.WriteMessage(websocket.TextMessage, answerJSON); err != nil {
+				log.Printf("Failed to send answer: %v", err)
+			}
+		}
+	})
 }
 
 func (wr *WebrtcReceiver) createPeerConnection() {
@@ -417,63 +515,27 @@ func (wr *WebrtcReceiver) createPeerConnection() {
 		log.Printf("Failed to create PeerConnection: %v", err)
 		return
 	}
-	wr.pc = pc
-	//pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
-	//	if candidate == nil {
-	//		return
-	//	}
-	//	candidateInit := candidate.ToJSON()
-	//	candidateJSON := Candidate{
-	//		ID:        id,
-	//		Type:      "candidate",
-	//		Candidate: candidateInit.Candidate,
-	//	}
-	//	candidateJSONData, err := json.Marshal(candidateJSON)
-	//	if err != nil {
-	//		log.Printf("Candidate serialization problem: %v", err)
-	//		return
-	//	}
-	//	fmt.Printf("Candidate: %s\n", string(candidateJSONData))
-	//	wr.wsConn.WriteMessage(websocket.TextMessage, candidateJSONData)
-	//})
-	pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
-		log.Printf("ICE Connection State changed: %s", state)
-	})
 
-	pc.OnICEGatheringStateChange(func(state webrtc.ICEGatheringState) {
-		fmt.Printf("ICE Gathering State changed: %s\n", state)
-		if state == webrtc.ICEGatheringStateComplete {
-			answerJSON, _ := json.Marshal(Answer{
-				ID:   id,
-				Type: "answer",
-				SDP:  pc.LocalDescription().SDP,
-			})
-			fmt.Printf("local desc is: %s", answerJSON)
-			if err := wr.wsConn.WriteMessage(websocket.TextMessage, answerJSON); err != nil {
-				log.Printf("Failed to send answer: %v", err)
-			}
-		}
-	})
+	wr.pc = pc
+
+	wr.iceSetup()
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
-		fmt.Printf("dc: %s", dc.Label())
+		log.Printf("dc: %s", dc.Label())
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-			fmt.Printf("dc message: %s", msg.Data)
+			log.Printf("dc message: %s", msg.Data)
 		})
 	})
-	serverAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:9070")
-	if err != nil {
-		panic(err)
-	}
-	wr.udpSender, err = net.DialUDP("udp", nil, serverAddr)
-	if err != nil {
-		panic(err)
-	}
+
+	wr.SetupUDP("127.0.0.1", 9070)
 
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		log.Printf("PeerConnection State changed: %s", state)
-		if state == webrtc.PeerConnectionStateFailed {
-
+		switch state {
+		case webrtc.PeerConnectionStateClosed:
+			close(wr.shutdownChan)
+		case webrtc.PeerConnectionStateFailed:
+			wr.relaunchPeer()
 		}
 	})
 
@@ -489,18 +551,19 @@ func (wr *WebrtcReceiver) createPeerConnection() {
 		wr.onTrack(track, receiver)
 	})
 }
+
 func (wr *WebrtcReceiver) WsIsOpen() bool {
 	for wr.wsConn == nil {
 		time.Sleep(time.Millisecond * 100)
 	}
 	err := wr.wsConn.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	if err != nil {
-		fmt.Println("Error on set deadline:", err)
+		log.Println("Error on set deadline:", err)
 		return false
 	}
 	err = wr.wsConn.WriteMessage(websocket.PingMessage, []byte{})
 	if err != nil {
-		fmt.Println("Error during writing a message:", err)
+		log.Println("Error during writing a message:", err)
 		return false
 	}
 	return true

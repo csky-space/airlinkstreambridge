@@ -62,6 +62,8 @@ func (server *http_server) categoryHandle(w http.ResponseWriter, r *http.Request
 		server.appCategoryHandle(w, r)
 	case "Output":
 		server.outputCategoryHandle(w, r)
+	case "MediaSetup":
+		server.setupMediaCategory(w, r)
 	default:
 		fmt.Fprintf(w, "{\"err\":\"wrong category route\"}")
 	}
@@ -113,6 +115,30 @@ func (server *http_server) outputCategoryHandle(w http.ResponseWriter, r *http.R
 	default:
 		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
 	}
+}
+
+func (server *http_server) setupMediaCategory(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	switch vars["method"] {
+	case "setupCodecs":
+		server.setupCodecs(w, r)
+	default:
+		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
+	}
+}
+
+func (server *http_server) setupCodecs(w http.ResponseWriter, r *http.Request) {
+	var codecs []receivers.JSONCodec
+
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&codecs)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	server.wr.SetupCodecs(codecs)
+	r.Body.Close()
 }
 
 func (server *http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *http.Request) {
