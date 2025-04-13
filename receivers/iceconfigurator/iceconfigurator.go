@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 )
 
@@ -38,6 +39,7 @@ func NewICEConfigurator(hostUrl string, login string, password string) *ICEConfi
 }
 
 func (ice *ICEConfigurator) getToken(login string, password string, requestsPath string) string {
+	log.Printf("login with: %s, %s, %s", login, password, requestsPath)
 	loginData := map[string]interface{}{
 		"name": login,
 		"pass": password,

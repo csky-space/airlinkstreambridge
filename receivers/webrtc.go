@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"myproject/receivers/iceconfigurator"
@@ -50,6 +51,7 @@ type WebrtcReceiver struct {
 	udpAddr         string
 	setUDPAddrMut   sync.Mutex
 	iceConfigurator *iceconfigurator.ICEConfigurator
+	s               webrtc.SettingEngine
 
 	lastPacketTime      time.Time
 	reconnectMutex      sync.Mutex
@@ -58,6 +60,7 @@ type WebrtcReceiver struct {
 	shutdownChan        chan struct{}
 	transmitEnabled     bool
 	videoIsRunning      bool
+	iceTrickleEnabled   bool
 }
 
 type JSONRtcpFeedback struct {
@@ -126,7 +129,7 @@ func (wr *WebrtcReceiver) registerDefaultCodecs() {
 				{Type: "nack"},
 				{Type: "nack", Parameter: "pli"},
 				{Type: "transport-cc"},
-				//{Type: "ccm", Parameter: "fir"},
+				{Type: "ccm", Parameter: "fir"},
 			},
 		}, PayloadType: 111,
 	}
@@ -154,6 +157,7 @@ func collectFeedback(feedbacks []JSONRtcpFeedback) []webrtc.RTCPFeedback {
 }
 
 func (wr *WebrtcReceiver) setupCodecs(codecs []JSONCodec) {
+	log.Println("setupCodecs")
 	if codecs == nil {
 		wr.registerDefaultCodecs()
 	} else {
@@ -178,9 +182,28 @@ func (wr *WebrtcReceiver) SetupCodecs(codecs []JSONCodec) {
 	wr.setupCodecs(codecs)
 }
 
-func NewWebrtcReceiver(hostUrl string, login string, password string) *WebrtcReceiver {
-	wr := &WebrtcReceiver{shutdownChan: make(chan struct{})}
-	//wr.packetReceived = make(chan struct{}, 1)
+func (wr *WebrtcReceiver) SetupOutputProtocol(protocol string, address string, port int) {
+	log.Println("output protocol")
+	if protocol == "" {
+		protocol = "UDP"
+	}
+	if address == "" {
+		address = "127.0.0.1"
+	}
+	if port == 0 {
+		port = 9050
+	}
+	log.Printf("Output set as:\nprotocol:%s\naddress:%s\nport:%d", protocol, address, port)
+	switch protocol {
+	case "UDP":
+		wr.SetupUDP(address, port)
+	default:
+		log.Printf("Unsupported output protocol %s", protocol)
+	}
+}
+
+func (wr *WebrtcReceiver) Configure(hostUrl string, login string, password string) {
+	log.Println("configuring")
 	wr.iceConfigurator = iceconfigurator.NewICEConfigurator(hostUrl, login, password)
 	wr.lastRemoteSdp = ""
 	wr.wsUrl = wr.iceConfigurator.WsURL + "?name=GS" + login + "&partnerName=" + login
@@ -194,10 +217,19 @@ func NewWebrtcReceiver(hostUrl string, login string, password string) *WebrtcRec
 	s.SetIPFilter(func(ip net.IP) bool {
 		return ip.To4() != nil
 	})
+	wr.s = s
 	//s.SetFireOnTrackBeforeFirstRTP(true)
+}
 
-	wr.setupCodecs(nil)
+func NewWebrtcReceiver() *WebrtcReceiver {
+	wr := &WebrtcReceiver{shutdownChan: make(chan struct{}), iceTrickleEnabled: false}
+	//wr.packetReceived = make(chan struct{}, 1)
 
+	return wr
+}
+
+func (wr *WebrtcReceiver) Open() {
+	log.Println("open")
 	interceptorRegistry := &interceptor.Registry{}
 
 	intervalPliFactory, err := intervalpli.NewReceiverInterceptor(intervalpli.GeneratorInterval(time.Millisecond * 3000))
@@ -212,14 +244,13 @@ func NewWebrtcReceiver(hostUrl string, login string, password string) *WebrtcRec
 	}
 
 	wr.api = webrtc.NewAPI(
-		webrtc.WithSettingEngine(s),
+		webrtc.WithSettingEngine(wr.s),
 		webrtc.WithMediaEngine(wr.mediaEngine),
 		webrtc.WithInterceptorRegistry(interceptorRegistry),
 	)
+
 	wr.createPeerConnection()
 	wr.establishWs()
-
-	return wr
 }
 
 func (wr *WebrtcReceiver) establishWs() {
@@ -237,7 +268,7 @@ func (wr *WebrtcReceiver) readMessages() {
 	for {
 		_, message, err := wr.wsConn.ReadMessage()
 		if err != nil {
-			log.Println("Error during readiFng a message:", err)
+			log.Println("Error during reading a message:", err)
 			break
 		}
 		log.Printf("Received: %s\n", message)
@@ -455,25 +486,27 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 }
 
 func (wr *WebrtcReceiver) iceSetup() {
+	if wr.iceTrickleEnabled {
+		wr.pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+			if candidate == nil {
+				return
+			}
+			candidateInit := candidate.ToJSON()
+			candidateJSON := Candidate{
+				ID:        id,
+				Type:      "candidate",
+				Candidate: candidateInit.Candidate,
+			}
+			candidateJSONData, err := json.Marshal(candidateJSON)
+			if err != nil {
+				log.Printf("Candidate serialization problem: %v", err)
+				return
+			}
+			fmt.Printf("Candidate: %s\n", string(candidateJSONData))
+			wr.wsConn.WriteMessage(websocket.TextMessage, candidateJSONData)
+		})
+	}
 
-	//pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
-	//	if candidate == nil {
-	//		return
-	//	}
-	//	candidateInit := candidate.ToJSON()
-	//	candidateJSON := Candidate{
-	//		ID:        id,
-	//		Type:      "candidate",
-	//		Candidate: candidateInit.Candidate,
-	//	}
-	//	candidateJSONData, err := json.Marshal(candidateJSON)
-	//	if err != nil {
-	//		log.Printf("Candidate serialization problem: %v", err)
-	//		return
-	//	}
-	//	fmt.Printf("Candidate: %s\n", string(candidateJSONData))
-	//	wr.wsConn.WriteMessage(websocket.TextMessage, candidateJSONData)
-	//})
 	wr.pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		log.Printf("ICE Connection State changed: %s", state)
 
@@ -520,16 +553,14 @@ func (wr *WebrtcReceiver) createPeerConnection() {
 
 	wr.iceSetup()
 
-	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
+	wr.pc.OnDataChannel(func(dc *webrtc.DataChannel) {
 		log.Printf("dc: %s", dc.Label())
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 			log.Printf("dc message: %s", msg.Data)
 		})
 	})
 
-	wr.SetupUDP("127.0.0.1", 9070)
-
-	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+	wr.pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		log.Printf("PeerConnection State changed: %s", state)
 		switch state {
 		case webrtc.PeerConnectionStateClosed:
@@ -539,14 +570,14 @@ func (wr *WebrtcReceiver) createPeerConnection() {
 		}
 	})
 
-	_, _err := pc.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{
+	_, _err := wr.pc.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{
 		Direction: webrtc.RTPTransceiverDirectionRecvonly,
 	})
 	if _err != nil {
 		log.Printf("Failed to add transceiver: %v", err)
 	}
 
-	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+	wr.pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		log.Printf("Track received: %s (SSRC: %d)", track.Codec().MimeType, track.SSRC())
 		wr.onTrack(track, receiver)
 	})
@@ -554,7 +585,7 @@ func (wr *WebrtcReceiver) createPeerConnection() {
 
 func (wr *WebrtcReceiver) WsIsOpen() bool {
 	for wr.wsConn == nil {
-		time.Sleep(time.Millisecond * 100)
+		return false
 	}
 	err := wr.wsConn.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	if err != nil {
@@ -569,8 +600,23 @@ func (wr *WebrtcReceiver) WsIsOpen() bool {
 	return true
 }
 
+func (wr *WebrtcReceiver) CreateDefaultPipeline(hostUrl string, login string, password string) {
+	log.Println("create default pipeline")
+	wr.Configure(hostUrl, login, password)
+	wr.SetupOutputProtocol("UDP", "127.0.0.1", 9050)
+	wr.SetupCodecs(nil)
+	wr.Open()
+}
+
+func NewDefaultWebrtcReceiver(hostUrl string, login string, password string) *WebrtcReceiver {
+	log.Println("new webrtc default")
+	wr := &WebrtcReceiver{shutdownChan: make(chan struct{}), iceTrickleEnabled: false}
+	wr.CreateDefaultPipeline(hostUrl, login, password)
+
+	return wr
+}
+
 func (wr *WebrtcReceiver) Close() {
-	close(wr.shutdownChan)
 	if wr.pc != nil {
 		wr.pc.Close()
 	}
