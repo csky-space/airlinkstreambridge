@@ -256,7 +256,9 @@ func (wr *WebrtcReceiver) Open() {
 }
 
 func (wr *WebrtcReceiver) establishWs() {
+	websocket.DefaultDialer.HandshakeTimeout = 10 * time.Second
 	wsConn, _, err := websocket.DefaultDialer.Dial(wr.wsUrl, nil)
+
 	if err != nil {
 		log.Println("Websocket connection error:", err)
 		return
