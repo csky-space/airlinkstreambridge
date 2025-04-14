@@ -257,15 +257,27 @@ func (wr *WebrtcReceiver) Open() {
 }
 
 func (wr *WebrtcReceiver) establishWs() {
-	websocket.DefaultDialer.HandshakeTimeout = 10 * time.Second
-	wsConn, _, err := websocket.DefaultDialer.Dial(wr.wsUrl, nil)
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		wsConn, _, err := websocket.DefaultDialer.Dial(wr.wsUrl, nil)
+		if err == nil {
+			wr.wsConn = wsConn
+			go wr.readMessages()
+			return
+		}
+		wsConn.SetCloseHandler(func(code int, text string) error {
+			wsConn, _, err := websocket.DefaultDialer.Dial(wr.wsUrl, nil)
+			if err == nil {
+				wr.wsConn = wsConn
+				go wr.readMessages()
 
-	if err != nil {
-		log.Println("Websocket connection error:", err)
-		return
+			}
+			return nil
+		})
+		log.Printf("WebSocket connection failed (attempt %d): %v", i+1, err)
+		time.Sleep(time.Duration(i*i) * time.Second) // Exponential backoff
 	}
-	wr.wsConn = wsConn
-	go wr.readMessages()
+	log.Fatal("Failed to establish WebSocket after retries")
 }
 
 var (
@@ -274,6 +286,10 @@ var (
 )
 
 func (wr *WebrtcReceiver) readMessages() {
+	wr.wsConn.SetPingHandler(func(msg string) error {
+		err := wr.wsConn.WriteControl(websocket.PongMessage, []byte(msg), time.Now().Add(time.Second))
+		return err
+	})
 	wr.ping()
 	for {
 		_, message, err := wr.wsConn.ReadMessage()
@@ -314,11 +330,15 @@ func (wr *WebrtcReceiver) readMessages() {
 }
 
 func (wr *WebrtcReceiver) ping() {
-	wr.websocketMut.Lock()
-	defer wr.websocketMut.Unlock()
+	//wr.websocketMut.Lock()
+	//defer wr.websocketMut.Unlock()
 	message := Ping{ID: id, Type: "ping"}
 	messageJSON, _ := json.Marshal(message)
-	wr.wsConn.WriteMessage(websocket.TextMessage, messageJSON)
+	err := wr.wsConn.WriteMessage(websocket.TextMessage, messageJSON)
+	if err != nil {
+		log.Printf("error: %v\n", err)
+		go wr.establishWs()
+	}
 	log.Println(string(messageJSON))
 }
 
@@ -411,8 +431,8 @@ func (wr *WebrtcReceiver) relaunchPeer() {
 	wr.isReconnecting = true
 	wr.shutdownChan = make(chan struct{})
 	if wr.pc != nil {
-		wr.pc.Close()
-		wr.pc = nil
+		go wr.pc.Close()
+		<-wr.shutdownChan
 	}
 
 	go func() {
@@ -423,29 +443,29 @@ func (wr *WebrtcReceiver) relaunchPeer() {
 		}()
 
 		startTime := time.Now()
-		timeout := time.After(10 * time.Second)
+		timeout := time.After(30 * time.Second)
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 
-		<-wr.shutdownChan
-
 		wr.shutdownChan = make(chan struct{})
+		wr.ping()
 		for {
 			select {
 			case <-ticker.C:
 				log.Printf("Ms elapsed: %v", time.Since(startTime).Milliseconds())
 				if (wr.pc != nil) && (wr.pc.ConnectionState() == webrtc.PeerConnectionStateConnected) {
 					log.Println("PeerConnection reestablished")
+					return
 				}
 			case <-timeout:
 				log.Println("Reconnection timeout, retrying PeerConnection")
-				if wr.pc != nil {
-					wr.pc.Close()
+				if (wr.pc != nil) && (wr.pc.ConnectionState() != webrtc.PeerConnectionStateClosed) {
+					go wr.pc.Close()
 					<-wr.shutdownChan
 				}
 
 				wr.shutdownChan = make(chan struct{})
-				timeout = time.After(10 * time.Second)
+				timeout = time.After(30 * time.Second)
 				wr.createPeerConnection()
 				wr.ping()
 			}
