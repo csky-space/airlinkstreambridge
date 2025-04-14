@@ -1,13 +1,13 @@
 package receivers
 
 import (
+	"AirlinkStreamBridge/receivers/iceconfigurator"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
-	"myproject/receivers/iceconfigurator"
 	"net"
 	"strconv"
 	"sync"
@@ -56,6 +56,7 @@ type WebrtcReceiver struct {
 	lastPacketTime      time.Time
 	reconnectMutex      sync.Mutex
 	transmitEnableMutex sync.Mutex
+	websocketMut        sync.Mutex
 	isReconnecting      bool
 	shutdownChan        chan struct{}
 	transmitEnabled     bool
@@ -223,6 +224,7 @@ func (wr *WebrtcReceiver) Configure(hostUrl string, login string, password strin
 
 func NewWebrtcReceiver() *WebrtcReceiver {
 	wr := &WebrtcReceiver{shutdownChan: make(chan struct{}), iceTrickleEnabled: false}
+	wr.websocketMut = sync.Mutex{}
 	//wr.packetReceived = make(chan struct{}, 1)
 
 	return wr
@@ -301,6 +303,8 @@ func (wr *WebrtcReceiver) readMessages() {
 }
 
 func (wr *WebrtcReceiver) ping() {
+	wr.websocketMut.Lock()
+	defer wr.websocketMut.Unlock()
 	message := Ping{ID: id, Type: "ping"}
 	messageJSON, _ := json.Marshal(message)
 	wr.wsConn.WriteMessage(websocket.TextMessage, messageJSON)
@@ -308,6 +312,8 @@ func (wr *WebrtcReceiver) ping() {
 }
 
 func (wr *WebrtcReceiver) request() {
+	wr.websocketMut.Lock()
+	defer wr.websocketMut.Unlock()
 	message := Request{ID: id, Type: "request"}
 	messageJSON, _ := json.Marshal(message)
 	wr.wsConn.WriteMessage(websocket.TextMessage, messageJSON)
@@ -420,11 +426,13 @@ func (wr *WebrtcReceiver) relaunchPeer() {
 				if (wr.pc != nil) && (wr.pc.ConnectionState() == webrtc.PeerConnectionStateConnected) {
 					log.Println("PeerConnection reestablished")
 				}
-				return
 			case <-timeout:
 				log.Println("Reconnection timeout, retrying PeerConnection")
-				wr.pc.Close()
-				<-wr.shutdownChan
+				if wr.pc != nil {
+					wr.pc.Close()
+					<-wr.shutdownChan
+				}
+
 				wr.shutdownChan = make(chan struct{})
 				timeout = time.After(10 * time.Second)
 				wr.createPeerConnection()
@@ -471,6 +479,9 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 				}
 				if wr.transmitEnabled {
 					wr.videoIsRunning = true
+					//log.Println("write to udp")
+					//os.Stdout.Sync()
+					//runtime.Gosched()
 					_, err = wr.udpSender.Write(raw)
 					if err != nil {
 						wr.videoIsRunning = false
@@ -515,12 +526,15 @@ func (wr *WebrtcReceiver) iceSetup() {
 	wr.pc.OnICEGatheringStateChange(func(state webrtc.ICEGatheringState) {
 		log.Printf("ICE Gathering State changed: %s\n", state)
 		if state == webrtc.ICEGatheringStateComplete {
+			wr.websocketMut.Lock()
+			defer wr.websocketMut.Unlock()
 			answerJSON, _ := json.Marshal(Answer{
 				ID:   id,
 				Type: "answer",
 				SDP:  wr.pc.LocalDescription().SDP,
 			})
 			log.Printf("local desc is: %s", answerJSON)
+
 			if err := wr.wsConn.WriteMessage(websocket.TextMessage, answerJSON); err != nil {
 				log.Printf("Failed to send answer: %v", err)
 			}
@@ -587,11 +601,13 @@ func (wr *WebrtcReceiver) WsIsOpen() bool {
 	for wr.wsConn == nil {
 		return false
 	}
-	err := wr.wsConn.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	err := wr.wsConn.SetWriteDeadline(time.Now().Add(20 * time.Second))
 	if err != nil {
 		log.Println("Error on set deadline:", err)
 		return false
 	}
+	wr.websocketMut.Lock()
+	defer wr.websocketMut.Unlock()
 	err = wr.wsConn.WriteMessage(websocket.PingMessage, []byte{})
 	if err != nil {
 		log.Println("Error during writing a message:", err)
@@ -606,13 +622,14 @@ func (wr *WebrtcReceiver) CreateDefaultPipeline(hostUrl string, login string, pa
 	wr.SetupOutputProtocol("UDP", "127.0.0.1", 9050)
 	wr.SetupCodecs(nil)
 	wr.Open()
+
 }
 
 func NewDefaultWebrtcReceiver(hostUrl string, login string, password string) *WebrtcReceiver {
 	log.Println("new webrtc default")
-	wr := &WebrtcReceiver{shutdownChan: make(chan struct{}), iceTrickleEnabled: false}
+	wr := &WebrtcReceiver{shutdownChan: make(chan struct{}), iceTrickleEnabled: false, websocketMut: sync.Mutex{}}
 	wr.CreateDefaultPipeline(hostUrl, login, password)
-
+	wr.SetTransmitEnabled(true)
 	return wr
 }
 

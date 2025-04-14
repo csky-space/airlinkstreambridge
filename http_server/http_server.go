@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"AirlinkStreamBridge/receivers"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -12,7 +13,6 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"myproject/receivers"
 	"net"
 	"net/http"
 	"sync"
