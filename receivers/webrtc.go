@@ -2,6 +2,7 @@ package receivers
 
 import (
 	"AirlinkStreamBridge/receivers/iceconfigurator"
+	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -267,14 +268,22 @@ func (wr *WebrtcReceiver) establishWs() {
 	go wr.readMessages()
 }
 
+var (
+	newline = []byte{'\n'}
+	space   = []byte{' '}
+)
+
 func (wr *WebrtcReceiver) readMessages() {
 	wr.ping()
 	for {
 		_, message, err := wr.wsConn.ReadMessage()
 		if err != nil {
-			log.Println("Error during reading a message:", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("error: %v", err)
+			}
 			break
 		}
+		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 		log.Printf("Received: %s\n", message)
 		var data map[string]interface{}
 		if err := json.Unmarshal(message, &data); err != nil {
