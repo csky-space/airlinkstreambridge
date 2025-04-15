@@ -31,7 +31,7 @@ type ICEConfigurator struct {
 }
 
 func NewICEConfigurator(hostUrl string, login string, password string) *ICEConfigurator {
-	ice := &ICEConfigurator{}
+	ice := &ICEConfigurator{Login: login}
 	requestsPath := "https://" + hostUrl + "/api/groundStation"
 
 	ice.getConfiguration(ice.getToken(login, password, requestsPath), requestsPath)

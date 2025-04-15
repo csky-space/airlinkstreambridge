@@ -156,8 +156,11 @@ func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		server.wr.Close()
-		server.wr = nil
+		if server.wr != nil {
+			server.wr.Close()
+			server.wr = nil
+		}
+
 		server.wr = receivers.NewDefaultWebrtcReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password)
 		fmt.Fprintf(w, "{\"success\":true}")
 	} else {
@@ -369,7 +372,7 @@ func (server *http_server) closeApp() {
 func NewHttpServer() *http_server {
 	server := &http_server{}
 	server.shouldBeClosed = false
-	server.wr = receivers.NewWebrtcReceiver()
+	server.wr = nil
 	return server
 }
 
