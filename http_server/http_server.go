@@ -37,6 +37,10 @@ type UDPProtocol struct {
 	Port     int    `json:"port"`
 }
 
+type DefaultReceiver struct {
+	UDPPort int `json:"UDPPort"`
+}
+
 type http_server struct {
 	router    *mux.Router
 	tlsConfig *tls.Config
