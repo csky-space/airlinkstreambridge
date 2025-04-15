@@ -407,6 +407,8 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 					//log.Println("write to udp")
 					//os.Stdout.Sync()
 					//runtime.Gosched()
+					wr.setUDPAddrMut.Lock()
+					defer wr.setUDPAddrMut.Unlock()
 					_, err = wr.udpSender.Write(raw)
 					if err != nil {
 						wr.videoIsRunning = false
