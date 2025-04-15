@@ -36,14 +36,15 @@ type WebrtcReceiver struct {
 
 	lastPacketTime      time.Time
 	peerConnectTimeout  *time.Timer
+	videoTrackTimeout   *time.Timer
 	reconnectMutex      sync.Mutex
 	transmitEnableMutex sync.Mutex
 
-	peerDisconnected  chan struct{}
-	peerConnected     chan struct{}
-	peerFailed        chan struct{}
-	videoTrackTimeout chan struct{}
-	channelsMutex     sync.Mutex
+	peerDisconnected chan struct{}
+	peerConnected    chan struct{}
+	peerFailed       chan struct{}
+
+	channelsMutex sync.Mutex
 
 	isReconnecting    bool
 	transmitEnabled   bool
@@ -221,7 +222,8 @@ func (wr *WebrtcReceiver) Configure(hostUrl string, login string, password strin
 }
 
 func NewWebrtcReceiver() *WebrtcReceiver {
-	wr := &WebrtcReceiver{peerDisconnected: make(chan struct{}), iceTrickleEnabled: false, peerConnected: make(chan struct{}), videoTrackTimeout: make(chan struct{})}
+	wr := &WebrtcReceiver{peerDisconnected: make(chan struct{}), iceTrickleEnabled: false, peerConnected: make(chan struct{}),
+		peerConnectTimeout: time.NewTimer(1000000000 * time.Second), videoTrackTimeout: time.NewTimer(1000000000 * time.Second)}
 
 	return wr
 }
@@ -254,7 +256,7 @@ func (wr *WebrtcReceiver) Open() {
 	wr.ws.SetOnPing(func() {
 		wr.ws.startSignalling()
 	})
-	wr.launchPeer()
+
 	go wr.peerConnectionWatchdog()
 }
 
@@ -325,7 +327,7 @@ func (wr *WebrtcReceiver) checkPacketTimeout() {
 			wr.reconnectMutex.Unlock()
 
 			if elapsed > (5 * time.Second).Seconds() {
-				wr.resetChannel(&wr.videoTrackTimeout)
+				wr.videoTrackTimeout.Reset(5 * time.Second)
 				return
 			}
 		}
@@ -354,13 +356,13 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 				log.Println("PeerConnection established")
 			case <-wr.peerFailed:
 				log.Println("Peer connection failed, retrying PeerConnection")
-				wr.reLaunchPeer()
+				wr.ReLaunchPeer()
 			case <-wr.peerConnectTimeout.C:
 				log.Println("Connection timeout, retrying PeerConnection")
-				wr.reLaunchPeer()
-			case <-wr.videoTrackTimeout:
+				wr.ReLaunchPeer()
+			case <-wr.videoTrackTimeout.C:
 				log.Println("Video timeout, retrying PeerConnection")
-				wr.reLaunchPeer()
+				wr.ReLaunchPeer()
 			}
 		}
 	}()
@@ -386,7 +388,6 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 				if err != nil {
 					wr.videoIsRunning = false
 					log.Printf("ReadRTP error: %v", err)
-					wr.resetChannel(&wr.videoTrackTimeout)
 					return
 				}
 
@@ -542,21 +543,22 @@ func NewDefaultWebrtcReceiver(hostUrl string, login string, password string, por
 }
 
 func (wr *WebrtcReceiver) Close() {
-	go wr.peerClose()
+	go wr.PeerClose()
 	go wr.wsClose()
 }
 
-func (wr *WebrtcReceiver) launchPeer() {
+func (wr *WebrtcReceiver) LaunchPeer() {
+	log.Println("LaunchPeer")
 	wr.peerConnectTimeout = time.NewTimer(20 * time.Second)
 	wr.ws.ping()
 }
 
-func (wr *WebrtcReceiver) reLaunchPeer() {
+func (wr *WebrtcReceiver) ReLaunchPeer() {
 	if (wr.pc != nil) && (wr.pc.ConnectionState() != webrtc.PeerConnectionStateClosed) {
-		wr.peerClose()
+		wr.PeerClose()
 	}
 	wr.createPeerConnection()
-	wr.launchPeer()
+	wr.LaunchPeer()
 }
 
 func (wr *WebrtcReceiver) wsClose() {
@@ -565,11 +567,13 @@ func (wr *WebrtcReceiver) wsClose() {
 	}
 }
 
-func (wr *WebrtcReceiver) peerClose() {
+func (wr *WebrtcReceiver) PeerClose() {
+	log.Println("PeerClose")
 	if wr.pc != nil {
 		wr.pc.Close()
 	}
 	<-wr.peerDisconnected
+	wr.videoTrackTimeout.Stop()
 	log.Println("peer closed")
 }
 

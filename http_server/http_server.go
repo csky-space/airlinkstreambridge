@@ -120,6 +120,10 @@ func (server *http_server) connectionCategoryHandle(w http.ResponseWriter, r *ht
 		server.closeHandle(w, r)
 	case "isConnected":
 		server.isConnected(w, r)
+	case "closePeer":
+		server.closePeerHandle(w, r)
+	case "openPeer":
+		server.openPeerHandle(w, r)
 	default:
 		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
 	}
@@ -165,7 +169,6 @@ func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 		}
 		if server.wr != nil {
 			server.wr.Close()
-			server.wr = nil
 		}
 
 		server.wr = receivers.NewDefaultWebrtcReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password, reqJSON.UDPPort)
@@ -254,6 +257,20 @@ func (server *http_server) closeHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.Close()
 		server.wr = nil
+	}
+}
+
+func (server *http_server) closePeerHandle(w http.ResponseWriter, r *http.Request) {
+	log.Println("closePeerHandle")
+	if server.wr != nil {
+		server.wr.PeerClose()
+	}
+}
+
+func (server *http_server) openPeerHandle(w http.ResponseWriter, r *http.Request) {
+	log.Println("openPeerHandle")
+	if server.wr != nil {
+		server.wr.ReLaunchPeer()
 	}
 }
 
