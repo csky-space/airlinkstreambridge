@@ -524,7 +524,7 @@ func (wr *WebrtcReceiver) CreateDefaultPipeline(hostUrl string, login string, pa
 	log.Println("create default pipeline")
 	wr.Configure(hostUrl, login, password)
 
-	wr.SetupOutputProtocol("UDP", "127.0.0.1", 9050)
+	wr.SetupOutputProtocol("UDP", "127.0.0.1", UDPPort)
 	wr.SetupCodecs(nil)
 	wr.Open()
 
