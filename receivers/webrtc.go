@@ -464,17 +464,21 @@ func (wr *WebrtcReceiver) iceSetup() {
 }
 
 func (wr *WebrtcReceiver) createPeerConnection() {
-	iceServers := []webrtc.ICEServer{
-		{
-			URLs: wr.iceConfigurator.StunServers,
-		},
-		{
-			URLs:           []string{wr.iceConfigurator.TurnServers[0].URL, wr.iceConfigurator.TurnServers[1].URL},
-			Username:       wr.iceConfigurator.TurnServers[0].Username,
-			Credential:     wr.iceConfigurator.TurnServers[0].Credential,
-			CredentialType: webrtc.ICECredentialTypePassword,
-		},
+	iceServers := []webrtc.ICEServer{}
+	for i := 0; i < len(wr.iceConfigurator.StunServers); i++ {
+		iceServers = append(iceServers, webrtc.ICEServer{
+			URLs: []string{wr.iceConfigurator.StunServers[i]},
+		})
 	}
+	for i := 0; i < len(wr.iceConfigurator.TurnServers); i++ {
+		iceServers = append(iceServers, webrtc.ICEServer{
+			URLs:           []string{wr.iceConfigurator.TurnServers[i].URL},
+			Username:       wr.iceConfigurator.TurnServers[i].Username,
+			Credential:     wr.iceConfigurator.TurnServers[i].Credential,
+			CredentialType: webrtc.ICECredentialTypePassword,
+		})
+	}
+
 	pc, err := wr.api.NewPeerConnection(webrtc.Configuration{
 		ICETransportPolicy: webrtc.ICETransportPolicyAll,
 		ICEServers:         iceServers,
