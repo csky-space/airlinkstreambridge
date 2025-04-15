@@ -38,7 +38,10 @@ type UDPProtocol struct {
 }
 
 type DefaultReceiver struct {
-	UDPPort int `json:"UDPPort"`
+	HostName  string `json:"hostName"`
+	ModemName string `json:"modemName"`
+	Password  string `json:"password"`
+	UDPPort   int    `json:"UDPPort"`
 }
 
 type http_server struct {
@@ -153,7 +156,7 @@ func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 	log.Println("createDefaultReceiverHandle")
 	if server.wr == nil || !server.wr.WsIsOpen() {
 		log.Println("creating default")
-		var reqJSON ConfigurationServerInput
+		var reqJSON DefaultReceiver
 
 		err := json.NewDecoder(r.Body).Decode(&reqJSON)
 		if err != nil {
@@ -165,7 +168,7 @@ func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 			server.wr = nil
 		}
 
-		server.wr = receivers.NewDefaultWebrtcReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password)
+		server.wr = receivers.NewDefaultWebrtcReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password, reqJSON.UDPPort)
 		fmt.Fprintf(w, "{\"success\":true}")
 	} else {
 		fmt.Fprintf(w, "{\"err\":\"webreceiver already opened. this call will be skip\"}")

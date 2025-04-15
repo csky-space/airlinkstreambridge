@@ -520,19 +520,23 @@ func (wr *WebrtcReceiver) createPeerConnection() {
 	})
 }
 
-func (wr *WebrtcReceiver) CreateDefaultPipeline(hostUrl string, login string, password string) {
+func (wr *WebrtcReceiver) CreateDefaultPipeline(hostUrl string, login string, password string, UDPPort int) {
 	log.Println("create default pipeline")
 	wr.Configure(hostUrl, login, password)
+
 	wr.SetupOutputProtocol("UDP", "127.0.0.1", 9050)
 	wr.SetupCodecs(nil)
 	wr.Open()
 
 }
 
-func NewDefaultWebrtcReceiver(hostUrl string, login string, password string) *WebrtcReceiver {
+func NewDefaultWebrtcReceiver(hostUrl string, login string, password string, port int) *WebrtcReceiver {
 	log.Println("new webrtc default")
 	wr := NewWebrtcReceiver()
-	wr.CreateDefaultPipeline(hostUrl, login, password)
+	if port == 0 {
+		port = 9050
+	}
+	wr.CreateDefaultPipeline(hostUrl, login, password, port)
 	wr.SetTransmitEnabled(true)
 	return wr
 }
