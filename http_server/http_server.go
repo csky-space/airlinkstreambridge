@@ -246,7 +246,6 @@ func (server *http_server) openHandle(w http.ResponseWriter, r *http.Request) {
 				fmt.Println("ws is open")
 				time.Sleep(time.Millisecond * 1000)
 			}
-			server.wr = nil
 		}()
 	} else {
 		fmt.Fprintf(w, "{\"err\":\"webreceiver already opened. this call will be skip\"}")
@@ -256,7 +255,6 @@ func (server *http_server) openHandle(w http.ResponseWriter, r *http.Request) {
 func (server *http_server) closeHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.Close()
-		server.wr = nil
 	}
 }
 
