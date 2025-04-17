@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"net"
@@ -34,7 +35,7 @@ type OutputProtocol struct {
 type UDPProtocol struct {
 	Protocol string `json:"protocol"`
 	Address  string `json:"address"`
-	Port     int    `json:"port"`
+	Port     int    `json:"UDPPort"`
 }
 
 type DefaultReceiver struct {
@@ -204,29 +205,44 @@ func (server *http_server) setupCodecsHandle(w http.ResponseWriter, r *http.Requ
 }
 
 func (server *http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *http.Request) {
+	log.Println("setupOutputProtocolHandle")
 	var protocol OutputProtocol
 
-	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&protocol)
+	// Чтение тела запроса
+	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
+		log.Printf("Failed to read body: %v", err)
+		http.Error(w, "Failed to read body", http.StatusInternalServerError)
+		return
+	}
+	r.Body.Close()
+
+	// Декодирование JSON
+	err = json.Unmarshal(bodyBytes, &protocol)
+	if err != nil {
+		log.Printf("Invalid JSON: %v\n", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
+	log.Println("setupOutputProtocolHandle decoded")
 
 	switch protocol.Protocol {
 	case "UDP":
+		log.Println("setup udp")
 		var udpSetup UDPProtocol
-		udpErr := decoder.Decode(&udpSetup)
-		if udpErr != nil {
+		// Декодирование UDP
+		err = json.Unmarshal(bodyBytes, &udpSetup) // Используем те же данные
+		if err != nil {
+			log.Printf("Invalid JSON for UDP setup: %v", err)
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
+
 		server.wr.SetupUDP(udpSetup.Address, udpSetup.Port)
 	default:
+		log.Println("setup default")
 		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
-
 	}
-	r.Body.Close()
 }
 
 func (server *http_server) openHandle(w http.ResponseWriter, r *http.Request) {

@@ -9,8 +9,11 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/pion/interceptor"
@@ -33,6 +36,7 @@ type WebrtcReceiver struct {
 	setUDPAddrMut   sync.Mutex
 	iceConfigurator *iceconfigurator.ICEConfigurator
 	s               webrtc.SettingEngine
+	udpNetAddr      *net.UDPAddr
 
 	lastPacketTime      time.Time
 	peerConnectTimeout  *time.Timer
@@ -86,17 +90,39 @@ func (wr *WebrtcReceiver) IsConnected() bool {
 }
 
 func (wr *WebrtcReceiver) SetupUDP(address string, port int) {
+	log.Printf("setup udp with %s:%d\n", address, port)
 	wr.setUDPAddrMut.Lock()
 	defer wr.setUDPAddrMut.Unlock()
+	if wr.udpSender != nil {
+		wr.udpSender.Close()
+	}
+
 	wr.udpAddr = address + ":" + strconv.Itoa(port)
-	serverAddr, err := net.ResolveUDPAddr("udp", wr.udpAddr)
+	var err error
+	//wr.udpSender, err = net.ListenPacket("udp", ":0")
+	//if err != nil {
+	//	log.Fatalf("ListenPacket error: %v", err)
+	//}
+
+	wr.udpNetAddr, err = net.ResolveUDPAddr("udp", wr.udpAddr)
 	if err != nil {
 		panic(err)
 	}
-	wr.udpSender, err = net.DialUDP("udp", nil, serverAddr)
+
+	wr.udpSender, err = net.DialUDP("udp", nil, wr.udpNetAddr)
 	if err != nil {
 		panic(err)
 	}
+	wr.udpSender.SetWriteBuffer(1 << 20)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigs
+		fmt.Println("Received signal:", sig)
+		wr.Close()
+		os.Exit(0)
+	}()
+	log.Printf("end of setup udp with %s:%d\n", address, port)
 }
 
 func (wr *WebrtcReceiver) SetTransmitEnabled(enabled bool) {
@@ -344,6 +370,7 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 	wr.isReconnecting = true
 
 	go func() {
+		//wr.SetupUDP("127.0.0.1", )
 		defer func() {
 			wr.reconnectMutex.Lock()
 			wr.isReconnecting = false
@@ -404,11 +431,7 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 				}
 				if wr.transmitEnabled {
 					wr.videoIsRunning = true
-					//log.Println("write to udp")
-					//os.Stdout.Sync()
-					//runtime.Gosched()
-					//wr.setUDPAddrMut.Lock()
-					//defer wr.setUDPAddrMut.Unlock()
+
 					_, err = wr.udpSender.Write(raw)
 					if err != nil {
 						wr.videoIsRunning = false
@@ -551,6 +574,10 @@ func NewDefaultWebrtcReceiver(hostUrl string, login string, password string, por
 func (wr *WebrtcReceiver) Close() {
 	go wr.PeerClose()
 	go wr.wsClose()
+	if wr.udpSender != nil {
+		go wr.udpSender.Close()
+	}
+
 }
 
 func (wr *WebrtcReceiver) LaunchPeer() {

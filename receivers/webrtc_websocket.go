@@ -97,6 +97,7 @@ func (ws *Webrtc_websocket) readMessages() {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
+			triggerChannel(&ws.ClosedUnexpectedly)
 			break
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
@@ -184,7 +185,7 @@ func (ws *Webrtc_websocket) connectionWatchdog() {
 		case <-ws.ClosedUnexpectedly:
 			ws.establishWs()
 		case <-ws.ClosedExpectedly:
-			ws.open()
+			//ws.open()
 		}
 	}
 }

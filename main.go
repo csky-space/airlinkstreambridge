@@ -8,6 +8,7 @@ import (
 )
 
 func main() {
+	os.Stdin.Close()
 	log.SetOutput(os.Stdout)
 	log.SetFlags(0)
 	f := os.Stdout
