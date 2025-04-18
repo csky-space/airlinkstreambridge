@@ -134,7 +134,7 @@ func (server *http_server) appCategoryHandle(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 	switch vars["method"] {
 	case "close":
-		server.closeApp()
+		go server.closeApp()
 	default:
 		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
 	}
@@ -173,7 +173,10 @@ func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 		}
 
 		server.wr = receivers.NewDefaultWebrtcReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password, reqJSON.UDPPort)
+		log.Println("http complete creating")
+		//<-server.wr.WebrtcReceiverCreated
 		fmt.Fprintf(w, "{\"success\":true}")
+		log.Println("webrtc cl")
 	} else {
 		fmt.Fprintf(w, "{\"err\":\"webreceiver already opened. this call will be skip\"}")
 	}
@@ -201,6 +204,7 @@ func (server *http_server) setupCodecsHandle(w http.ResponseWriter, r *http.Requ
 	}
 
 	server.wr.SetupCodecs(codecs)
+	fmt.Fprintf(w, "{\"success\":true}")
 	r.Body.Close()
 }
 
@@ -239,10 +243,12 @@ func (server *http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *h
 		}
 
 		server.wr.SetupUDP(udpSetup.Address, udpSetup.Port)
+		fmt.Fprintf(w, "{\"success\":true}")
 	default:
 		log.Println("setup default")
 		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
 	}
+
 }
 
 func (server *http_server) openHandle(w http.ResponseWriter, r *http.Request) {
@@ -278,13 +284,18 @@ func (server *http_server) closePeerHandle(w http.ResponseWriter, r *http.Reques
 	log.Println("closePeerHandle")
 	if server.wr != nil {
 		server.wr.PeerClose()
+		fmt.Fprintf(w, "{\"success\":true}")
 	}
 }
 
 func (server *http_server) openPeerHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("openPeerHandle")
 	if server.wr != nil {
-		server.wr.ReLaunchPeer()
+		go server.wr.ReLaunchPeer()
+		log.Println("http complete open")
+		<-server.wr.PeerConnected
+		log.Println("p open")
+		fmt.Fprintf(w, "{\"success\":true}")
 	}
 }
 
@@ -307,12 +318,14 @@ func (server *http_server) isConnected(w http.ResponseWriter, r *http.Request) {
 func (server *http_server) startVideoHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.SetTransmitEnabled(true)
+		fmt.Fprintf(w, "{\"success\":true}")
 	}
 }
 
 func (server *http_server) stopVideoHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.SetTransmitEnabled(false)
+		fmt.Fprintf(w, "{\"success\":true}")
 	}
 }
 

@@ -55,12 +55,12 @@ func NewWebrtcWebsocket(wsUrl string) *Webrtc_websocket {
 		readMutex:  sync.Mutex{},
 		writeMutex: sync.Mutex{},
 		onPing:     func() {}, onOffer: func(sdp string) error { return nil }, onRemoteCandidate: func(candidate string) {},
-		ClosedExpectedly:   make(chan struct{}),
-		ClosedUnexpectedly: make(chan struct{}),
-		Pinged:             make(chan struct{}),
-		Requested:          make(chan struct{}),
-		Offered:            make(chan struct{}),
-		Candidate:          make(chan struct{}),
+		ClosedExpectedly:   make(chan struct{}, 1),
+		ClosedUnexpectedly: make(chan struct{}, 1),
+		Pinged:             make(chan struct{}, 1),
+		Requested:          make(chan struct{}, 1),
+		Offered:            make(chan struct{}, 1),
+		Candidate:          make(chan struct{}, 1),
 	}
 	ws.establishWs()
 	go ws.connectionWatchdog()
@@ -77,9 +77,15 @@ func (ws *Webrtc_websocket) establishWs() {
 		ws.isConnected = false
 		switch code {
 		case websocket.CloseNormalClosure:
-			triggerChannel(&ws.ClosedExpectedly)
+			select {
+			case ws.ClosedExpectedly <- struct{}{}:
+			default:
+			}
 		default:
-			triggerChannel(&ws.ClosedUnexpectedly)
+			select {
+			case ws.ClosedUnexpectedly <- struct{}{}:
+			default:
+			}
 		}
 
 		return nil
@@ -97,7 +103,10 @@ func (ws *Webrtc_websocket) readMessages() {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
-			triggerChannel(&ws.ClosedUnexpectedly)
+			select {
+			case ws.ClosedUnexpectedly <- struct{}{}:
+			default:
+			}
 			break
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
@@ -119,13 +128,23 @@ func (ws *Webrtc_websocket) readMessages() {
 
 		switch msgType {
 		case "ping":
-			triggerChannel(&ws.Pinged)
+			select {
+			case ws.Pinged <- struct{}{}:
+			default:
+			}
 			ws.onPing()
 		case "offer":
-			triggerChannel(&ws.Offered)
+			select {
+			case ws.Offered <- struct{}{}:
+			default:
+			}
 			ws.onOffer(data["sdp"].(string))
 		case "candidate":
-			triggerChannel(&ws.Candidate)
+
+			select {
+			case ws.Candidate <- struct{}{}:
+			default:
+			}
 			ws.onRemoteCandidate(data["candidate"].(string))
 		default:
 			log.Println("Error: Unknown message type:", msgType)
@@ -147,11 +166,6 @@ func (ws *Webrtc_websocket) request() {
 	messageJSON, _ := json.Marshal(message)
 	ws.WriteMessage(messageJSON)
 	log.Println(messageJSON)
-}
-
-func triggerChannel(channel *chan struct{}) {
-	close(*channel)
-	*channel = make(chan struct{})
 }
 
 func (ws *Webrtc_websocket) IsOpen() bool {
@@ -185,7 +199,7 @@ func (ws *Webrtc_websocket) connectionWatchdog() {
 		case <-ws.ClosedUnexpectedly:
 			ws.establishWs()
 		case <-ws.ClosedExpectedly:
-			//ws.open()
+			ws.open()
 		}
 	}
 }
