@@ -174,7 +174,7 @@ func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 
 		server.wr = receivers.NewDefaultWebrtcReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password, reqJSON.UDPPort)
 		log.Println("http complete creating")
-		//<-server.wr.WebrtcReceiverCreated
+		<-server.wr.WebrtcReceiverCreated.Subscribe()
 		fmt.Fprintf(w, "{\"success\":true}")
 		log.Println("webrtc cl")
 	} else {
@@ -293,9 +293,16 @@ func (server *http_server) openPeerHandle(w http.ResponseWriter, r *http.Request
 	if server.wr != nil {
 		go server.wr.ReLaunchPeer()
 		log.Println("http complete open")
-		<-server.wr.PeerConnected
-		log.Println("p open")
-		fmt.Fprintf(w, "{\"success\":true}")
+		select {
+		case <-server.wr.PeerConnected.Subscribe():
+			log.Println("p open")
+			fmt.Fprint(w, `{"success":true}`)
+		case <-time.After(20 * time.Second):
+			log.Println("timeout waiting for PeerConnected")
+			fmt.Fprint(w, `{"success":true}`) //http.Error(w, "timeout waiting for connection", http.StatusGatewayTimeout)
+		}
+	} else {
+		http.Error(w, "receiver not initialized", http.StatusBadRequest)
 	}
 }
 
