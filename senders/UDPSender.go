@@ -1,6 +1,7 @@
 package senders
 
 import (
+	"AirlinkStreamBridge/receivers"
 	"log"
 	"net"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 )
 
 type UDPSender struct {
@@ -16,6 +18,8 @@ type UDPSender struct {
 	udpNetAddr *net.UDPAddr
 	setAddrMut sync.Mutex
 	sendMut    sync.Mutex
+
+	shouldReconnectEvent *receivers.EventBroadcaster
 }
 
 func (sender *UDPSender) SetupUDP(address string, port int) error {
@@ -61,6 +65,7 @@ func (sender *UDPSender) Send(data []byte) error {
 	defer sender.sendMut.Unlock()
 	_, err := sender.socket.Write(data)
 	if err != nil {
+		sender.shouldReconnectEvent.Fire()
 		log.Printf("raw %v didn't write with error: %s", data, err)
 		return err
 	}
@@ -71,6 +76,21 @@ func (sender *UDPSender) Close() {
 	sender.socket.Close()
 }
 
+func (sender *UDPSender) udpWatchdog() {
+	reconnect := sender.shouldReconnectEvent.Subscribe()
+	defer sender.shouldReconnectEvent.Unsubscribe(reconnect)
+	for {
+		select {
+		case <-reconnect:
+			sender.socket.Close()
+			sender.SetupUDP(string(sender.udpNetAddr.IP), sender.udpNetAddr.Port)
+		default:
+			time.Sleep(time.Millisecond * 100)
+		}
+	}
+
+}
+
 func NewUDPSender(address string, port int) (ISender, error) {
 	if port == 0 {
 		port = 9050
@@ -78,7 +98,8 @@ func NewUDPSender(address string, port int) (ISender, error) {
 	if address == "" {
 		address = "127.0.0.1"
 	}
-	sender := &UDPSender{}
+	sender := &UDPSender{shouldReconnectEvent: receivers.NewEventBroadcaster()}
 	err := sender.SetupUDP(address, port)
+	go sender.udpWatchdog()
 	return sender, err
 }

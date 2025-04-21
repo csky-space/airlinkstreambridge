@@ -190,7 +190,11 @@ func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 		}
 		server.wr.SetOnRTP(func(data []byte) error {
 			if server.sender != nil {
-				return server.sender.Send(data)
+				err := server.sender.Send(data)
+				if err != nil {
+					server.sender.Close()
+				}
+				return err
 			}
 			return errors.New("sender doesn't exists")
 		})
