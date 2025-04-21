@@ -3,26 +3,40 @@ package receivers
 import "sync"
 
 type EventBroadcaster struct {
-	subscribers []chan struct{}
+	subscribers map[chan struct{}]struct{}
 	mu          sync.Mutex
 }
 
 func NewEventBroadcaster() *EventBroadcaster {
-	return &EventBroadcaster{}
+	return &EventBroadcaster{
+		subscribers: make(map[chan struct{}]struct{}),
+	}
 }
 
-func (eb *EventBroadcaster) Subscribe() <-chan struct{} {
-	eb.mu.Lock()
-	defer eb.mu.Unlock()
+func (eb *EventBroadcaster) Subscribe() chan struct{} {
 	ch := make(chan struct{}, 1)
-	eb.subscribers = append(eb.subscribers, ch)
+
+	eb.mu.Lock()
+	eb.subscribers[ch] = struct{}{}
+	eb.mu.Unlock()
+
 	return ch
+}
+
+func (eb *EventBroadcaster) Unsubscribe(ch chan struct{}) {
+	eb.mu.Lock()
+	if _, found := eb.subscribers[ch]; found {
+		delete(eb.subscribers, ch)
+		close(ch)
+	}
+	eb.mu.Unlock()
 }
 
 func (eb *EventBroadcaster) Fire() {
 	eb.mu.Lock()
 	defer eb.mu.Unlock()
-	for _, ch := range eb.subscribers {
+
+	for ch := range eb.subscribers {
 		select {
 		case ch <- struct{}{}:
 		default:

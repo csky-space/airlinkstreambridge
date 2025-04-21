@@ -35,12 +35,12 @@ type Webrtc_websocket struct {
 	wsConn     *websocket.Conn
 	wsUrl      string
 
-	ClosedExpectedly   chan struct{}
-	ClosedUnexpectedly chan struct{}
-	Pinged             chan struct{}
-	Requested          chan struct{}
-	Offered            chan struct{}
-	Candidate          chan struct{}
+	ClosedExpectedly   *EventBroadcaster
+	ClosedUnexpectedly *EventBroadcaster
+	Pinged             *EventBroadcaster
+	Requested          *EventBroadcaster
+	Offered            *EventBroadcaster
+	Candidate          *EventBroadcaster
 
 	onPing            func()
 	onOffer           func(sdp string) error
@@ -49,47 +49,48 @@ type Webrtc_websocket struct {
 	isConnected bool
 }
 
-func NewWebrtcWebsocket(wsUrl string) *Webrtc_websocket {
+func NewWebrtcWebsocket(wsUrl string) (*Webrtc_websocket, error) {
 	ws := &Webrtc_websocket{wsUrl: wsUrl,
 		wsConn:     nil,
 		readMutex:  sync.Mutex{},
 		writeMutex: sync.Mutex{},
 		onPing:     func() {}, onOffer: func(sdp string) error { return nil }, onRemoteCandidate: func(candidate string) {},
-		ClosedExpectedly:   make(chan struct{}, 1),
-		ClosedUnexpectedly: make(chan struct{}, 1),
-		Pinged:             make(chan struct{}, 1),
-		Requested:          make(chan struct{}, 1),
-		Offered:            make(chan struct{}, 1),
-		Candidate:          make(chan struct{}, 1),
+		ClosedExpectedly:   NewEventBroadcaster(),
+		ClosedUnexpectedly: NewEventBroadcaster(),
+		Pinged:             NewEventBroadcaster(),
+		Requested:          NewEventBroadcaster(),
+		Offered:            NewEventBroadcaster(),
+		Candidate:          NewEventBroadcaster(),
 	}
-	ws.establishWs()
+	err := ws.establishWs()
+	if err != nil {
+		return nil, err
+	}
 	go ws.connectionWatchdog()
-	return ws
+	return ws, nil
 }
 
-func (ws *Webrtc_websocket) establishWs() {
+func (ws *Webrtc_websocket) establishWs() error {
 	if ws.wsConn != nil {
 		ws.wsConn.Close()
-		<-ws.ClosedExpectedly
+		<-ws.ClosedExpectedly.Subscribe()
 	}
-	ws.open()
+	err := ws.open()
+	if err != nil {
+		return err
+	}
 	ws.wsConn.SetCloseHandler(func(code int, text string) error {
 		ws.isConnected = false
 		switch code {
 		case websocket.CloseNormalClosure:
-			select {
-			case ws.ClosedExpectedly <- struct{}{}:
-			default:
-			}
+			ws.ClosedExpectedly.Fire()
 		default:
-			select {
-			case ws.ClosedUnexpectedly <- struct{}{}:
-			default:
-			}
+			ws.ClosedUnexpectedly.Fire()
 		}
 
 		return nil
 	})
+	return nil
 }
 
 func (ws *Webrtc_websocket) readMessages() {
@@ -103,11 +104,9 @@ func (ws *Webrtc_websocket) readMessages() {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
-			select {
-			case ws.ClosedUnexpectedly <- struct{}{}:
-			default:
-			}
-			break
+			ws.wsConn.Close()
+			return
+			//ws.ClosedUnexpectedly.Fire()
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 		log.Printf("Received: %s\n", message)
@@ -128,23 +127,13 @@ func (ws *Webrtc_websocket) readMessages() {
 
 		switch msgType {
 		case "ping":
-			select {
-			case ws.Pinged <- struct{}{}:
-			default:
-			}
+			ws.Pinged.Fire()
 			ws.onPing()
 		case "offer":
-			select {
-			case ws.Offered <- struct{}{}:
-			default:
-			}
+			ws.Offered.Fire()
 			ws.onOffer(data["sdp"].(string))
 		case "candidate":
-
-			select {
-			case ws.Candidate <- struct{}{}:
-			default:
-			}
+			ws.Candidate.Fire()
 			ws.onRemoteCandidate(data["candidate"].(string))
 		default:
 			log.Println("Error: Unknown message type:", msgType)
@@ -152,20 +141,28 @@ func (ws *Webrtc_websocket) readMessages() {
 	}
 }
 
-func (ws *Webrtc_websocket) ping() {
+func (ws *Webrtc_websocket) ping() error {
 	//wr.websocketMut.Lock()
 	//defer wr.websocketMut.Unlock()
 	message := Ping{ID: id, Type: "ping"}
 	messageJSON, _ := json.Marshal(message)
-	ws.WriteMessage(messageJSON)
+	err := ws.WriteMessage(messageJSON)
+	if err != nil {
+		return err
+	}
 	log.Println(string(messageJSON))
+	return nil
 }
 
-func (ws *Webrtc_websocket) request() {
+func (ws *Webrtc_websocket) request() error {
 	message := Request{ID: id, Type: "request"}
 	messageJSON, _ := json.Marshal(message)
-	ws.WriteMessage(messageJSON)
+	err := ws.WriteMessage(messageJSON)
+	if err != nil {
+		return err
+	}
 	log.Println(messageJSON)
+	return nil
 }
 
 func (ws *Webrtc_websocket) IsOpen() bool {
@@ -175,43 +172,53 @@ func (ws *Webrtc_websocket) IsOpen() bool {
 func (ws *Webrtc_websocket) Close() {
 	if ws.wsConn != nil {
 		ws.wsConn.Close()
-		<-ws.ClosedExpectedly
+		<-ws.ClosedExpectedly.Subscribe()
 	}
 }
 
-func (ws *Webrtc_websocket) WriteMessage(message []byte) {
+func (ws *Webrtc_websocket) WriteMessage(message []byte) error {
 	ws.writeMutex.Lock()
 	defer ws.writeMutex.Unlock()
 	err := ws.wsConn.WriteMessage(websocket.TextMessage, message)
 	if err != nil {
 		log.Printf("Websocket message write problem: %v", err)
-		return
+		return err
 	}
+	return nil
 }
 
-func (ws *Webrtc_websocket) startSignalling() {
-	ws.request()
+func (ws *Webrtc_websocket) startSignalling() error {
+	return ws.request()
 }
 
 func (ws *Webrtc_websocket) connectionWatchdog() {
+	unexpectedlySubscriber := ws.ClosedUnexpectedly.Subscribe()
+	expectedlySubscriber := ws.ClosedExpectedly.Subscribe()
 	for {
 		select {
-		case <-ws.ClosedUnexpectedly:
-			ws.establishWs()
-		case <-ws.ClosedExpectedly:
-			ws.open()
+		case <-unexpectedlySubscriber:
+			err := ws.establishWs()
+			if err != nil {
+				log.Printf("Establishing websoket connection failed with error: %v", err)
+			}
+		case <-expectedlySubscriber:
+			err := ws.open()
+			if err != nil {
+				log.Printf("websocket open error: %v", err)
+			}
 		}
 	}
 }
 
-func (ws *Webrtc_websocket) open() {
+func (ws *Webrtc_websocket) open() error {
 	wsConn, _, err := websocket.DefaultDialer.Dial(ws.wsUrl, nil)
 	if err == nil {
 		ws.isConnected = true
 		ws.wsConn = wsConn
 		go ws.readMessages()
-		return
+		return err
 	}
+	return nil
 }
 
 func (ws *Webrtc_websocket) SetOnPing(onPing func()) {
@@ -238,7 +245,7 @@ func (ws *Webrtc_websocket) SingleShotOnPing(onPing func()) {
 		case <-timeout:
 			ws.onPing = onPingOriginal
 			return
-		case <-ws.Pinged:
+		case <-ws.Pinged.Subscribe():
 			ws.onPing = onPingOriginal
 			return
 		}

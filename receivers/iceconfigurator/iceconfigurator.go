@@ -3,9 +3,11 @@ package iceconfigurator
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 type PostResponse struct {
@@ -30,15 +32,21 @@ type ICEConfigurator struct {
 	FpvLatency      int          `json:"fpvLatency"`
 }
 
-func NewICEConfigurator(hostUrl string, login string, password string) *ICEConfigurator {
+func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConfigurator, error) {
 	ice := &ICEConfigurator{Login: login}
 	requestsPath := "https://" + hostUrl + "/api/groundStation"
-
-	ice.getConfiguration(ice.getToken(login, password, requestsPath), requestsPath)
-	return ice
+	token, err := ice.getToken(login, password, requestsPath)
+	if err != nil {
+		return nil, err
+	}
+	err = ice.getConfiguration(token, requestsPath)
+	if err != nil {
+		return nil, err
+	}
+	return ice, nil
 }
 
-func (ice *ICEConfigurator) getToken(login string, password string, requestsPath string) string {
+func (ice *ICEConfigurator) getToken(login string, password string, requestsPath string) (string, error) {
 	log.Printf("login with: %s, %s, %s", login, password, requestsPath)
 	loginData := map[string]interface{}{
 		"name": login,
@@ -46,32 +54,42 @@ func (ice *ICEConfigurator) getToken(login string, password string, requestsPath
 	}
 	loginJsonData, err := json.Marshal(loginData)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
 	loginResponse, err := http.Post(requestsPath+"/login", "application/json", bytes.NewBuffer(loginJsonData))
 	if err != nil {
-		panic(err)
+		return "", err
 	}
-	defer loginResponse.Body.Close()
 
+	defer loginResponse.Body.Close()
+	statusCode := loginResponse.StatusCode
+	if statusCode >= 400 {
+		if statusCode < 500 {
+			return "", errors.New("client error. status code: " + strconv.Itoa(statusCode))
+		} else {
+			return "", errors.New("server error. status code: " + strconv.Itoa(statusCode))
+		}
+
+	}
 	loginResponseBody, err := io.ReadAll(loginResponse.Body)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
+	log.Printf("login response body: %s", loginResponseBody)
 	var accessToken PostResponse
 	err = json.Unmarshal(loginResponseBody, &accessToken)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
-	return accessToken.AccessToken
+	return accessToken.AccessToken, nil
 }
 
-func (ice *ICEConfigurator) getConfiguration(accessToken string, requestsPath string) {
+func (ice *ICEConfigurator) getConfiguration(accessToken string, requestsPath string) error {
 	req, err := http.NewRequest("GET", requestsPath+"/config", nil)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -80,17 +98,18 @@ func (ice *ICEConfigurator) getConfiguration(accessToken string, requestsPath st
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer resp.Body.Close()
 
 	configResponseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	err = json.Unmarshal(configResponseBody, &ice)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }

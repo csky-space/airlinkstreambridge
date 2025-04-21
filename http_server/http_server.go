@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"AirlinkStreamBridge/receivers"
+	"AirlinkStreamBridge/senders"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -10,6 +11,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -50,6 +52,7 @@ type http_server struct {
 	tlsConfig *tls.Config
 	cert      tls.Certificate
 	wr        *receivers.WebrtcReceiver
+	sender    senders.ISender
 	listener  net.Listener
 
 	closeMut       sync.Mutex
@@ -73,7 +76,7 @@ func (server *http_server) categoryHandle(w http.ResponseWriter, r *http.Request
 	case "App":
 		server.appCategoryHandle(w, r)
 	default:
-		fmt.Fprintf(w, "{\"err\":\"wrong category route\"}")
+		http.Error(w, "wrong category route "+vars["category"], http.StatusMethodNotAllowed)
 	}
 }
 
@@ -94,7 +97,7 @@ func (server *http_server) webrtcCategoryHandle(w http.ResponseWriter, r *http.R
 	case "createDefaultReceiver":
 		server.createDefaultReceiverHandle(w, r)
 	default:
-		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
+		http.Error(w, "wrong method route "+vars["method"], http.StatusMethodNotAllowed)
 	}
 }
 
@@ -108,7 +111,7 @@ func (server *http_server) videoCategoryHandle(w http.ResponseWriter, r *http.Re
 	case "isRunning":
 		server.videoIsRunningHandle(w, r)
 	default:
-		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
+		http.Error(w, "wrong method route "+vars["method"], http.StatusMethodNotAllowed)
 	}
 }
 
@@ -126,7 +129,7 @@ func (server *http_server) connectionCategoryHandle(w http.ResponseWriter, r *ht
 	case "openPeer":
 		server.openPeerHandle(w, r)
 	default:
-		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
+		http.Error(w, "wrong method route "+vars["method"], http.StatusMethodNotAllowed)
 	}
 }
 
@@ -136,7 +139,7 @@ func (server *http_server) appCategoryHandle(w http.ResponseWriter, r *http.Requ
 	case "close":
 		go server.closeApp()
 	default:
-		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
+		http.Error(w, "wrong method route "+vars["method"], http.StatusMethodNotAllowed)
 	}
 }
 
@@ -152,7 +155,7 @@ func (server *http_server) configureHandle(w http.ResponseWriter, r *http.Reques
 
 		server.wr.Configure(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password)
 	} else {
-		fmt.Fprintf(w, "{\"err\":\"webreceiver already opened. this call will be skip\"}")
+		http.Error(w, "webreceiver already opened. this call will be skip", http.StatusAlreadyReported)
 	}
 
 }
@@ -172,13 +175,40 @@ func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 			server.wr.Close()
 		}
 
-		server.wr = receivers.NewDefaultWebrtcReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password, reqJSON.UDPPort)
+		if server.sender != nil {
+			server.sender.Close()
+		}
+		server.sender, err = senders.NewUDPSender("", reqJSON.UDPPort)
+		if err != nil {
+			http.Error(w, "udp sender creation error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		server.wr, err = receivers.NewDefaultWebrtcReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password)
+		if err != nil {
+			http.Error(w, "default receiver creation error "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		server.wr.SetOnRTP(func(data []byte) error {
+			if server.sender != nil {
+				return server.sender.Send(data)
+			}
+			return errors.New("sender doesn't exists")
+		})
 		log.Println("http complete creating")
-		<-server.wr.WebrtcReceiverCreated.Subscribe()
+		subscriber := server.wr.WebrtcReceiverCreated.Subscribe()
+		select {
+		case <-subscriber:
+			log.Println("p open")
+			fmt.Fprint(w, `{"success":true}`)
+		case <-time.After(20 * time.Second):
+			log.Println("timeout waiting for creating webrtc")
+			http.Error(w, "webrtcreceiver creating timeout", http.StatusInternalServerError)
+		}
+		server.wr.WebrtcReceiverCreated.Unsubscribe(subscriber)
 		fmt.Fprintf(w, "{\"success\":true}")
 		log.Println("webrtc cl")
 	} else {
-		fmt.Fprintf(w, "{\"err\":\"webreceiver already opened. this call will be skip\"}")
+		http.Error(w, "webrtcreceiver already opened. this call will be skip", http.StatusAlreadyReported)
 	}
 
 }
@@ -203,7 +233,11 @@ func (server *http_server) setupCodecsHandle(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	server.wr.SetupCodecs(codecs)
+	err = server.wr.SetupCodecs(codecs)
+	if err != nil {
+		http.Error(w, "can't setup codecs: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	fmt.Fprintf(w, "{\"success\":true}")
 	r.Body.Close()
 }
@@ -212,7 +246,6 @@ func (server *http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *h
 	log.Println("setupOutputProtocolHandle")
 	var protocol OutputProtocol
 
-	// Чтение тела запроса
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("Failed to read body: %v", err)
@@ -221,7 +254,6 @@ func (server *http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *h
 	}
 	r.Body.Close()
 
-	// Декодирование JSON
 	err = json.Unmarshal(bodyBytes, &protocol)
 	if err != nil {
 		log.Printf("Invalid JSON: %v\n", err)
@@ -234,19 +266,25 @@ func (server *http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *h
 	case "UDP":
 		log.Println("setup udp")
 		var udpSetup UDPProtocol
-		// Декодирование UDP
-		err = json.Unmarshal(bodyBytes, &udpSetup) // Используем те же данные
+
+		err = json.Unmarshal(bodyBytes, &udpSetup)
 		if err != nil {
 			log.Printf("Invalid JSON for UDP setup: %v", err)
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
+		if server.sender != nil {
+			server.sender.Close()
+		}
+		server.sender, err = senders.NewUDPSender(udpSetup.Address, udpSetup.Port)
+		if err != nil {
+			http.Error(w, "udp sender creation error: "+err.Error(), http.StatusInternalServerError)
+			fmt.Fprintf(w, "{\"error\":\"%v\"}", err)
+		}
 
-		server.wr.SetupUDP(udpSetup.Address, udpSetup.Port)
 		fmt.Fprintf(w, "{\"success\":true}")
 	default:
-		log.Println("setup default")
-		fmt.Fprintf(w, "{\"err\":\"wrong method route\"}")
+		http.Error(w, "unsupported protocol", http.StatusNotImplemented)
 	}
 
 }
@@ -270,7 +308,7 @@ func (server *http_server) openHandle(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 	} else {
-		fmt.Fprintf(w, "{\"err\":\"webreceiver already opened. this call will be skip\"}")
+		fmt.Fprintf(w, `{"err":"webreceiver already opened. this call will be skip"}`)
 	}
 }
 
@@ -284,7 +322,7 @@ func (server *http_server) closePeerHandle(w http.ResponseWriter, r *http.Reques
 	log.Println("closePeerHandle")
 	if server.wr != nil {
 		server.wr.PeerClose()
-		fmt.Fprintf(w, "{\"success\":true}")
+		fmt.Fprintf(w, `{"success":true}`)
 	}
 }
 
@@ -293,16 +331,19 @@ func (server *http_server) openPeerHandle(w http.ResponseWriter, r *http.Request
 	if server.wr != nil {
 		go server.wr.ReLaunchPeer()
 		log.Println("http complete open")
+
+		peerOpenedSubscriber := server.wr.PeerConnected.Subscribe()
 		select {
-		case <-server.wr.PeerConnected.Subscribe():
+		case <-peerOpenedSubscriber:
 			log.Println("p open")
 			fmt.Fprint(w, `{"success":true}`)
 		case <-time.After(20 * time.Second):
 			log.Println("timeout waiting for PeerConnected")
-			fmt.Fprint(w, `{"success":true}`) //http.Error(w, "timeout waiting for connection", http.StatusGatewayTimeout)
+			fmt.Print(w, "\"warning\":\"Timeout waiting for connection. Not error! Webrtc would connect as soon as webrtc chain or airlink be restored\"")
 		}
+		server.wr.PeerConnected.Unsubscribe(peerOpenedSubscriber)
 	} else {
-		http.Error(w, "receiver not initialized", http.StatusBadRequest)
+		http.Error(w, "receiver not initialized", http.StatusConflict)
 	}
 }
 
@@ -326,14 +367,18 @@ func (server *http_server) startVideoHandle(w http.ResponseWriter, r *http.Reque
 	if server.wr != nil {
 		server.wr.SetTransmitEnabled(true)
 		fmt.Fprintf(w, "{\"success\":true}")
+		return
 	}
+	http.Error(w, "receiver doesn't exist", http.StatusConflict)
 }
 
 func (server *http_server) stopVideoHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.SetTransmitEnabled(false)
 		fmt.Fprintf(w, "{\"success\":true}")
+		return
 	}
+	http.Error(w, "receiver doesn't exist", http.StatusConflict)
 }
 
 func (server *http_server) videoIsRunningHandle(w http.ResponseWriter, r *http.Request) {
@@ -409,6 +454,7 @@ func (server *http_server) setupTLSServer() {
 	server.listener, err = tls.Listen("tcp", ":8443", server.tlsConfig)
 	if err != nil {
 		log.Fatalf("TLS listener creation error: %v", err)
+		return
 	}
 
 	log.Println("HTTPS server has been started at https://localhost:8443")
