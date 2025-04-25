@@ -2,8 +2,10 @@ package receivers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -47,6 +49,9 @@ type Webrtc_websocket struct {
 	onRemoteCandidate func(candidate string)
 
 	isConnected bool
+
+	customResolver *net.Resolver
+	customDialer   websocket.Dialer
 }
 
 func NewWebrtcWebsocket(wsUrl string) (*Webrtc_websocket, error) {
@@ -61,6 +66,22 @@ func NewWebrtcWebsocket(wsUrl string) (*Webrtc_websocket, error) {
 		Requested:          NewEventBroadcaster(),
 		Offered:            NewEventBroadcaster(),
 		Candidate:          NewEventBroadcaster(),
+	}
+
+	ws.customResolver = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := &net.Dialer{Timeout: time.Second * 2}
+			return d.DialContext(ctx, network, "8.8.8.8:53")
+		},
+	}
+
+	ws.customDialer = websocket.Dialer{
+		NetDialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+			Resolver:  ws.customResolver,
+		}).DialContext,
 	}
 	err := ws.establishWs()
 	if err != nil {
@@ -211,13 +232,16 @@ func (ws *Webrtc_websocket) connectionWatchdog() {
 }
 
 func (ws *Webrtc_websocket) open() error {
-	wsConn, _, err := websocket.DefaultDialer.Dial(ws.wsUrl, nil)
-	if err == nil {
-		ws.isConnected = true
-		ws.wsConn = wsConn
-		go ws.readMessages()
+	wsConn, _, err := ws.customDialer.Dial(ws.wsUrl, nil)
+	if err != nil {
 		return err
 	}
+	if wsConn == nil {
+		log.Println("wsConn is nil")
+	}
+	ws.isConnected = true
+	ws.wsConn = wsConn
+	go ws.readMessages()
 	return nil
 }
 

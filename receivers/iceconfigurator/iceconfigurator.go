@@ -2,12 +2,15 @@ package iceconfigurator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type PostResponse struct {
@@ -22,6 +25,10 @@ type TurnServer struct {
 }
 
 type ICEConfigurator struct {
+	customResolver  *net.Resolver
+	customTransport *http.Transport
+	customClient    *http.Client
+
 	TurnServers     []TurnServer `json:"turnServers"`
 	StunServers     []string     `json:"stunServers"`
 	WsURL           string       `json:"wsUrl"`
@@ -33,7 +40,32 @@ type ICEConfigurator struct {
 }
 
 func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConfigurator, error) {
+
 	ice := &ICEConfigurator{Login: login}
+
+	ice.customResolver = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := &net.Dialer{
+				Timeout: time.Second * 2,
+			}
+			return d.DialContext(ctx, network, "8.8.8.8:53") // Google DNS
+		},
+	}
+
+	ice.customTransport = &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+			Resolver:  ice.customResolver,
+		}).DialContext,
+	}
+
+	ice.customClient = &http.Client{
+		Transport: ice.customTransport,
+		Timeout:   10 * time.Second,
+	}
+
 	requestsPath := "https://" + hostUrl + "/api/groundStation"
 	token, err := ice.getToken(login, password, requestsPath)
 	if err != nil {
@@ -57,7 +89,13 @@ func (ice *ICEConfigurator) getToken(login string, password string, requestsPath
 		return "", err
 	}
 
-	loginResponse, err := http.Post(requestsPath+"/login", "application/json", bytes.NewBuffer(loginJsonData))
+	req, err := http.NewRequest("POST", requestsPath+"/login", bytes.NewBuffer(loginJsonData))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	loginResponse, err := ice.customClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -91,12 +129,10 @@ func (ice *ICEConfigurator) getConfiguration(accessToken string, requestsPath st
 	if err != nil {
 		return err
 	}
-
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := ice.customClient.Do(req)
 	if err != nil {
 		return err
 	}

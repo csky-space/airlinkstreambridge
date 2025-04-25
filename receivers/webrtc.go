@@ -12,10 +12,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/ice/v4"
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/intervalpli"
 	"github.com/pion/logging"
 	"github.com/pion/webrtc/v4"
+	"github.com/wlynxg/anet"
 )
 
 var id string = rand.Text()
@@ -200,6 +202,7 @@ func (wr *WebrtcReceiver) Configure(hostUrl string, login string, password strin
 	s := webrtc.SettingEngine{
 		//LoggerFactory: loggingFactory,
 	}
+	s.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
 	s.SetICETimeouts(5*time.Second, 30*time.Second, 5*time.Second)
 	s.SetIPFilter(func(ip net.IP) bool {
 		return ip.To4() != nil
@@ -210,6 +213,7 @@ func (wr *WebrtcReceiver) Configure(hostUrl string, login string, password strin
 }
 
 func NewWebrtcReceiver() *WebrtcReceiver {
+	anet.SetAndroidVersion(13)
 	wr := &WebrtcReceiver{
 		PeerClosed:            NewEventBroadcaster(),
 		PeerConnected:         NewEventBroadcaster(),
@@ -495,7 +499,7 @@ func (wr *WebrtcReceiver) createPeerConnection() error {
 	}
 	for i := 0; i < len(wr.iceConfigurator.TurnServers); i++ {
 		iceServers = append(iceServers, webrtc.ICEServer{
-			URLs:           []string{wr.iceConfigurator.TurnServers[i].URL},
+			URLs:           []string{wr.iceConfigurator.TurnServers[i].URL + "?transport=udp"},
 			Username:       wr.iceConfigurator.TurnServers[i].Username,
 			Credential:     wr.iceConfigurator.TurnServers[i].Credential,
 			CredentialType: webrtc.ICECredentialTypePassword,
@@ -565,8 +569,8 @@ func (wr *WebrtcReceiver) CreateDefaultPipeline(hostUrl string, login string, pa
 	if err != nil {
 		return err
 	}
-	wr.Open()
-	return nil
+
+	return wr.Open()
 }
 
 func NewDefaultWebrtcReceiver(hostUrl string, login string, password string) (*WebrtcReceiver, error) {
