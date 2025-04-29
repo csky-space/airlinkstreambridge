@@ -154,7 +154,7 @@ func (wr *WebrtcReceiver) setupCodecs(codecs []JSONCodec) error {
 	log.Println("setupCodecs")
 
 	if codecs == nil {
-		err := wr.mediaEngine.RegisterDefaultCodecs() //wr.registerDefaultCodecs()
+		err := wr.registerDefaultCodecs() //wr.mediaEngine.RegisterDefaultCodecs()
 		if err != nil {
 			return err
 		}
