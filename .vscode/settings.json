@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "utility": "cpp",
+        "algorithm": "cpp",
+        "thread": "cpp",
+        "xhash": "cpp",
+        "xlocnum": "cpp",
+        "optional": "cpp",
+        "memory": "cpp"
+    }
+}
