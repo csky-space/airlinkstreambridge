@@ -152,11 +152,13 @@ func collectFeedback(feedbacks []JSONRtcpFeedback) []webrtc.RTCPFeedback {
 
 func (wr *WebrtcReceiver) setupCodecs(codecs []JSONCodec) error {
 	log.Println("setupCodecs")
+
 	if codecs == nil {
-		err := wr.registerDefaultCodecs()
+		err := wr.mediaEngine.RegisterDefaultCodecs() //wr.registerDefaultCodecs()
 		if err != nil {
 			return err
 		}
+
 	} else {
 		for codecNumber := 0; codecNumber < len(codecs); codecNumber++ {
 			rtcpFeedback := collectFeedback(codecs[codecNumber].Feedbacks)
@@ -241,7 +243,7 @@ func RegisterInterceptors(mediaEngine *webrtc.MediaEngine, interceptorRegistry *
 func (wr *WebrtcReceiver) Open() error {
 	log.Println("open")
 	interceptorRegistry := &interceptor.Registry{}
-
+	var err error
 	intervalPliFactory, err := intervalpli.NewReceiverInterceptor(intervalpli.GeneratorInterval(time.Millisecond * 1000))
 	if err != nil {
 		log.Printf("error on creating pli: %v", err)
@@ -413,10 +415,9 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 	if track.Kind() != webrtc.RTPCodecTypeVideo {
 		return
 	}
-	wr.videoTrackTimeout.Reset(time.Second * 5)
-	//wr.updateLastPacketTime()
 
-	//go wr.checkPacketTimeout()
+	wr.videoTrackTimeout.Reset(time.Second * 5)
+
 	go func() {
 		for {
 			select {
@@ -424,6 +425,7 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 				wr.videoIsRunning = false
 				return
 			default:
+				//track.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 				pkt, _, err := track.ReadRTP()
 				if err != nil {
 					wr.videoIsRunning = false
@@ -581,8 +583,8 @@ func (wr *WebrtcReceiver) CreateDefaultPipeline(hostUrl string, login string, pa
 	if err != nil {
 		return err
 	}
-	wr.Open()
-	return nil
+
+	return wr.Open()
 }
 
 func NewDefaultWebrtcReceiver(hostUrl string, login string, password string) (*WebrtcReceiver, error) {
