@@ -416,7 +416,7 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 		return
 	}
 
-	wr.videoTrackTimeout.Reset(time.Second * 5)
+	wr.videoTrackTimeout.Reset(time.Second * 15)
 
 	go func() {
 		for {
