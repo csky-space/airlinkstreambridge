@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -79,7 +78,7 @@ func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConf
 }
 
 func (ice *ICEConfigurator) getToken(login string, password string, requestsPath string) (string, error) {
-	log.Printf("login with: %s, %s, %s", login, password, requestsPath)
+	//log.Printf("login with: %s, %s, %s", login, password, requestsPath)
 	loginData := map[string]interface{}{
 		"name": login,
 		"pass": password,
@@ -114,7 +113,7 @@ func (ice *ICEConfigurator) getToken(login string, password string, requestsPath
 	if err != nil {
 		return "", err
 	}
-	log.Printf("login response body: %s", loginResponseBody)
+	//log.Printf("login response body: %s", loginResponseBody)
 	var accessToken PostResponse
 	err = json.Unmarshal(loginResponseBody, &accessToken)
 	if err != nil {
