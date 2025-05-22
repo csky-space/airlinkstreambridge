@@ -162,59 +162,32 @@ func (server *http_server) configureHandle(w http.ResponseWriter, r *http.Reques
 
 func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("createDefaultReceiverHandle")
-	if server.wr == nil || !server.wr.WsIsOpen() {
-		log.Println("creating default")
-		var reqJSON DefaultReceiver
+	log.Println("creating default")
+	var reqJSON DefaultReceiver
 
-		err := json.NewDecoder(r.Body).Decode(&reqJSON)
-		if err != nil {
-			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		if server.wr != nil {
-			server.wr.Close()
-		}
-
-		if server.sender != nil {
-			server.sender.Close()
-		}
-		server.sender, err = senders.NewUDPSender("", reqJSON.UDPPort)
-		if err != nil {
-			http.Error(w, "udp sender creation error: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		server.wr, err = receivers.NewDefaultWebrtcReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password)
-		if err != nil {
-			http.Error(w, "default receiver creation error "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		server.wr.SetOnRTP(func(data []byte) error {
-			if server.sender != nil {
-				err := server.sender.Send(data)
-				if err != nil {
-					server.sender.Close()
-				}
-				return err
-			}
-			return errors.New("sender doesn't exists")
-		})
-		log.Println("http complete creating")
-		subscriber := server.wr.WebrtcReceiverCreated.Subscribe()
-		select {
-		case <-subscriber:
-			log.Println("p open")
-			fmt.Fprint(w, `{"success":true}`)
-		case <-time.After(20 * time.Second):
-			log.Println("timeout waiting for creating webrtc")
-			http.Error(w, "webrtcreceiver creating timeout", http.StatusInternalServerError)
-		}
-		server.wr.WebrtcReceiverCreated.Unsubscribe(subscriber)
-		fmt.Fprintf(w, "{\"success\":true}")
-		log.Println("webrtc cl")
-	} else {
-		http.Error(w, "webrtcreceiver already opened. this call will be skip", http.StatusAlreadyReported)
+	err := json.NewDecoder(r.Body).Decode(&reqJSON)
+	if err != nil {
+		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if server.wr != nil {
+		server.wr.Close()
 	}
 
+	if server.sender != nil {
+		server.sender.Close()
+	}
+	server.sender, err = senders.NewUDPSender("", reqJSON.UDPPort)
+	if err != nil {
+		http.Error(w, "udp sender creation error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if server.wr != nil {
+		server.wr.Close()
+		server.wr = nil
+	}
+	server.createDefaultReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password, w)
 }
 
 //func (server *http_server) outputCategoryHandle(w http.ResponseWriter, r *http.Request) {
@@ -492,4 +465,36 @@ func (server *http_server) Loop() {
 	for !server.shouldBeClosed {
 		time.Sleep(time.Second)
 	}
+}
+
+func (server *http_server) createDefaultReceiver(hostUrl string, login string, password string, w http.ResponseWriter) {
+	var err error
+	server.wr, err = receivers.NewDefaultWebrtcReceiver(hostUrl, login, password)
+	if err != nil {
+		http.Error(w, "default receiver creation error "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	server.wr.SetOnData(func(data []byte) error {
+		if server.sender != nil {
+			err := server.sender.Send(data)
+			if err != nil {
+				server.sender.Close()
+			}
+			return err
+		}
+		return errors.New("sender doesn't exists")
+	})
+	log.Println("http complete creating")
+	subscriber := server.wr.WebrtcReceiverCreated.Subscribe()
+	select {
+	case <-subscriber:
+		log.Println("p open")
+		fmt.Fprint(w, `{"success":true}`)
+	case <-time.After(20 * time.Second):
+		log.Println("timeout waiting for creating webrtc")
+		http.Error(w, "webrtcreceiver creating timeout", http.StatusInternalServerError)
+	}
+	server.wr.WebrtcReceiverCreated.Unsubscribe(subscriber)
+	fmt.Fprintf(w, "{\"success\":true}")
+	log.Println("webrtc cl")
 }

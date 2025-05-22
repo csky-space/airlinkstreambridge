@@ -56,7 +56,7 @@ type WebrtcReceiver struct {
 	iceTrickleEnabled bool
 }
 
-func (wr *WebrtcReceiver) SetOnRTP(onRTP func(data []byte) error) {
+func (wr *WebrtcReceiver) SetOnData(onRTP func(data []byte) error) {
 	wr.onRTP = onRTP
 }
 
