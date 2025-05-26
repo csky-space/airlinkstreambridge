@@ -600,8 +600,8 @@ func NewDefaultWebrtcReceiver(hostUrl string, login string, password string) (*W
 }
 
 func (wr *WebrtcReceiver) Close() {
-	go wr.PeerClose()
-	go wr.wsClose()
+	wr.PeerClose()
+	wr.wsClose()
 }
 
 func (wr *WebrtcReceiver) LaunchPeer() error {
