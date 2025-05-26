@@ -632,18 +632,20 @@ func (wr *WebrtcReceiver) ReLaunchPeer() error {
 
 func (wr *WebrtcReceiver) wsClose() {
 	if wr.ws != nil {
-		wr.ws.Close()
+		go wr.ws.Close()
 	}
 }
 
 func (wr *WebrtcReceiver) PeerClose() {
 	log.Println("PeerClose")
-	if wr.pc != nil {
-		wr.pc.Close()
-	}
-	<-wr.PeerClosed.Subscribe()
 	wr.videoTrackTimeout.Stop()
+	if wr.pc != nil {
+		go wr.pc.Close()
+	}
+	sub := wr.PeerClosed.Subscribe()
+
 	log.Println("peer closed")
+	wr.PeerClosed.Unsubscribe(sub)
 }
 
 func (wr *WebrtcReceiver) WsIsOpen() bool {

@@ -471,6 +471,7 @@ func (server *http_server) createDefaultReceiver(hostUrl string, login string, p
 	var err error
 	server.wr, err = receivers.NewDefaultWebrtcReceiver(hostUrl, login, password)
 	if err != nil {
+		log.Println("default receiver creation error "+err.Error(), http.StatusInternalServerError)
 		http.Error(w, "default receiver creation error "+err.Error(), http.StatusInternalServerError)
 		return
 	}

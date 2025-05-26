@@ -193,7 +193,9 @@ func (ws *Webrtc_websocket) IsOpen() bool {
 func (ws *Webrtc_websocket) Close() {
 	if ws.wsConn != nil {
 		ws.wsConn.Close()
-		<-ws.ClosedExpectedly.Subscribe()
+		sub := ws.ClosedExpectedly.Subscribe()
+		<-sub
+		ws.ClosedExpectedly.Unsubscribe(sub)
 	}
 }
 
