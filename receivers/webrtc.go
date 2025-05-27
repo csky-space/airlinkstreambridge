@@ -370,7 +370,7 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 	disconnected := wr.PeerDisconnected.Subscribe()
 	failed := wr.PeerFailed.Subscribe()
 	//closed := wr.PeerClosed.Subscribe()
-	for {
+	for wr != nil {
 		select {
 		case <-connected:
 			log.Println("PeerConnection established")
@@ -407,7 +407,6 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 		default:
 			time.Sleep(time.Millisecond * 100)
 		}
-		//
 	}
 }
 
