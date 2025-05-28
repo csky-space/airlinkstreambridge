@@ -419,9 +419,11 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 
 	go func() {
 		for {
+			closedCh := wr.PeerClosed.Subscribe()
 			select {
-			case <-wr.PeerClosed.Subscribe():
+			case <-closedCh:
 				wr.videoIsRunning = false
+				wr.PeerClosed.Unsubscribe(closedCh)
 				return
 			default:
 				//track.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
@@ -429,6 +431,7 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 				if err != nil {
 					wr.videoIsRunning = false
 					log.Printf("ReadRTP error: %v", err)
+					wr.PeerClosed.Unsubscribe(closedCh)
 					return
 				}
 
@@ -455,7 +458,7 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 				} else {
 					wr.videoIsRunning = false
 				}
-
+				wr.PeerClosed.Unsubscribe(closedCh)
 			}
 		}
 	}()
@@ -545,6 +548,8 @@ func (wr *WebrtcReceiver) createPeerConnection() error {
 		case webrtc.PeerConnectionStateConnected:
 			wr.PeerConnected.Fire()
 		case webrtc.PeerConnectionStateClosed:
+			wr.videoTrackTimeout.Stop()
+			wr.peerConnectTimeout.Stop()
 			wr.PeerClosed.Fire()
 		case webrtc.PeerConnectionStateFailed:
 			wr.PeerFailed.Fire()
@@ -636,7 +641,7 @@ func (wr *WebrtcReceiver) wsClose() {
 }
 
 func (wr *WebrtcReceiver) PeerClose() {
-	log.Println("PeerClose")
+	wr.peerConnectTimeout.Stop()
 	wr.videoTrackTimeout.Stop()
 	if wr.pc != nil {
 		go wr.pc.Close()

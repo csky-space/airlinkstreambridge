@@ -82,8 +82,13 @@ func (sender *UDPSender) udpWatchdog() {
 	for {
 		select {
 		case <-reconnect:
-			sender.socket.Close()
-			sender.SetupUDP(string(sender.udpNetAddr.IP), sender.udpNetAddr.Port)
+			if sender != nil && sender.socket != nil && sender.udpNetAddr != nil {
+				sender.Close()
+				sender.SetupUDP(sender.udpNetAddr.IP.String(), sender.udpNetAddr.Port)
+			} else {
+				log.Println("Cannot reconnect: udpNetAddr is nil or socket is nil")
+				return
+			}
 		default:
 			time.Sleep(time.Millisecond * 100)
 		}
