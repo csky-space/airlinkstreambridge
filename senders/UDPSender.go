@@ -73,7 +73,13 @@ func (sender *UDPSender) Send(data []byte) error {
 }
 
 func (sender *UDPSender) Close() {
-	sender.socket.Close()
+	sender.setAddrMut.Lock()
+	defer sender.setAddrMut.Unlock()
+	if sender.socket != nil {
+		sender.socket.Close()
+		sender.socket = nil
+	}
+	sender.udpNetAddr = nil
 }
 
 func (sender *UDPSender) udpWatchdog() {
@@ -82,18 +88,24 @@ func (sender *UDPSender) udpWatchdog() {
 	for {
 		select {
 		case <-reconnect:
-			if sender != nil && sender.socket != nil && sender.udpNetAddr != nil {
+			if sender != nil && sender.udpNetAddr != nil {
+				sender.setAddrMut.Lock()
+				log.Println("Reconnecting UDP...")
 				sender.Close()
-				sender.SetupUDP(sender.udpNetAddr.IP.String(), sender.udpNetAddr.Port)
+				err := sender.SetupUDP(sender.udpNetAddr.IP.String(), sender.udpNetAddr.Port)
+				if err != nil {
+					log.Printf("Reconnect failed: %v", err)
+				}
 			} else {
-				log.Println("Cannot reconnect: udpNetAddr is nil or socket is nil")
+				log.Println("udpNetAddr is nil, stopping watchdog")
+				sender.setAddrMut.Unlock()
 				return
 			}
+			sender.setAddrMut.Unlock()
 		default:
-			time.Sleep(time.Millisecond * 100)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
-
 }
 
 func NewUDPSender(address string, port int) (ISender, error) {
