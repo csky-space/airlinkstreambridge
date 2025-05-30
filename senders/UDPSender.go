@@ -77,9 +77,7 @@ func (sender *UDPSender) Close() {
 	defer sender.setAddrMut.Unlock()
 	if sender.socket != nil {
 		sender.socket.Close()
-		sender.socket = nil
 	}
-	sender.udpNetAddr = nil
 }
 
 func (sender *UDPSender) udpWatchdog() {
@@ -88,6 +86,7 @@ func (sender *UDPSender) udpWatchdog() {
 	for {
 		select {
 		case <-reconnect:
+			log.Println("try reconnect")
 			if sender != nil && sender.udpNetAddr != nil {
 				sender.setAddrMut.Lock()
 				log.Println("Reconnecting UDP...")

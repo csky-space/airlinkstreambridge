@@ -424,6 +424,7 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 			case <-closedCh:
 				wr.videoIsRunning = false
 				wr.PeerClosed.Unsubscribe(closedCh)
+				//wr.videoTrackTimeout.Stop()
 				return
 			default:
 				//track.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
