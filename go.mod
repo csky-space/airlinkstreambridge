@@ -7,7 +7,6 @@ require (
 	github.com/pion/interceptor v0.1.37
 	github.com/pion/logging v0.2.3
 	github.com/pion/webrtc/v4 v4.0.15
-	github.com/wlynxg/anet v0.0.5
 )
 
 require (
@@ -22,9 +21,14 @@ require (
 	github.com/pion/stun/v3 v3.0.0 // indirect
 	github.com/pion/transport/v3 v3.0.7 // indirect
 	github.com/pion/turn/v4 v4.0.0 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
-	golang.org/x/net v0.35.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
+	github.com/wlynxg/anet v0.0.5 // indirect
+	golang.org/x/crypto v0.38.0 // indirect
+	golang.org/x/mobile v0.0.0-20250520180527-a1d90793fc63 // indirect
+	golang.org/x/mod v0.24.0 // indirect
+	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/sync v0.14.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/tools v0.33.0 // indirect
 )
 
 require (

@@ -47,7 +47,7 @@ type DefaultReceiver struct {
 	UDPPort   int    `json:"UDPPort"`
 }
 
-type http_server struct {
+type Http_server struct {
 	router    *mux.Router
 	tlsConfig *tls.Config
 	cert      tls.Certificate
@@ -63,7 +63,7 @@ func rootHandle(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "You're at root")
 }
 
-func (server *http_server) categoryHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) categoryHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("category handle")
 	vars := mux.Vars(r)
 	switch vars["category"] {
@@ -80,7 +80,7 @@ func (server *http_server) categoryHandle(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (server *http_server) webrtcCategoryHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) webrtcCategoryHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("webrtc handle")
 	vars := mux.Vars(r)
 	switch vars["method"] {
@@ -101,7 +101,7 @@ func (server *http_server) webrtcCategoryHandle(w http.ResponseWriter, r *http.R
 	}
 }
 
-func (server *http_server) videoCategoryHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) videoCategoryHandle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	switch vars["method"] {
 	case "startVideo":
@@ -115,7 +115,7 @@ func (server *http_server) videoCategoryHandle(w http.ResponseWriter, r *http.Re
 	}
 }
 
-func (server *http_server) connectionCategoryHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) connectionCategoryHandle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	switch vars["method"] {
 	case "open":
@@ -133,17 +133,17 @@ func (server *http_server) connectionCategoryHandle(w http.ResponseWriter, r *ht
 	}
 }
 
-func (server *http_server) appCategoryHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) appCategoryHandle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	switch vars["method"] {
 	case "close":
-		go server.closeApp()
+		go server.CloseApp()
 	default:
 		http.Error(w, "wrong method route "+vars["method"], http.StatusMethodNotAllowed)
 	}
 }
 
-func (server *http_server) configureHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) configureHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr == nil {
 		var reqJSON ConfigurationServerInput
 
@@ -160,7 +160,7 @@ func (server *http_server) configureHandle(w http.ResponseWriter, r *http.Reques
 
 }
 
-func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) createDefaultReceiverHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("createDefaultReceiverHandle")
 	log.Println("creating default")
 	var reqJSON DefaultReceiver
@@ -190,7 +190,7 @@ func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 	server.createDefaultReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password, w)
 }
 
-//func (server *http_server) outputCategoryHandle(w http.ResponseWriter, r *http.Request) {
+//func (server *Http_server) outputCategoryHandle(w http.ResponseWriter, r *http.Request) {
 //	vars := mux.Vars(r)
 //	switch vars["method"] {
 //	case "setupProtocol":
@@ -200,7 +200,7 @@ func (server *http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 //	}
 //}
 
-func (server *http_server) setupCodecsHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) setupCodecsHandle(w http.ResponseWriter, r *http.Request) {
 	var codecs []receivers.JSONCodec
 
 	decoder := json.NewDecoder(r.Body)
@@ -219,7 +219,7 @@ func (server *http_server) setupCodecsHandle(w http.ResponseWriter, r *http.Requ
 	r.Body.Close()
 }
 
-func (server *http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("setupOutputProtocolHandle")
 	var protocol OutputProtocol
 
@@ -266,7 +266,7 @@ func (server *http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *h
 
 }
 
-func (server *http_server) openHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) openHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr == nil {
 		var reqJSON ConfigurationServerInput
 
@@ -289,13 +289,13 @@ func (server *http_server) openHandle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (server *http_server) closeHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) closeHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.Close()
 	}
 }
 
-func (server *http_server) closePeerHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) closePeerHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("closePeerHandle")
 	if server.wr != nil {
 		server.wr.PeerClose()
@@ -303,7 +303,7 @@ func (server *http_server) closePeerHandle(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func (server *http_server) openPeerHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) openPeerHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("openPeerHandle")
 	if server.wr != nil {
 		go server.wr.ReLaunchPeer()
@@ -328,7 +328,7 @@ type IsConnectedResponse struct {
 	IsConnected bool `json:"isConnected"`
 }
 
-func (server *http_server) isConnected(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) isConnected(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.IsConnected()
 	}
@@ -340,7 +340,7 @@ func (server *http_server) isConnected(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-func (server *http_server) startVideoHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) startVideoHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.SetTransmitEnabled(true)
 		fmt.Fprintf(w, "{\"success\":true}")
@@ -349,7 +349,7 @@ func (server *http_server) startVideoHandle(w http.ResponseWriter, r *http.Reque
 	http.Error(w, "receiver doesn't exist", http.StatusConflict)
 }
 
-func (server *http_server) stopVideoHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) stopVideoHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.SetTransmitEnabled(false)
 		fmt.Fprintf(w, "{\"success\":true}")
@@ -358,7 +358,7 @@ func (server *http_server) stopVideoHandle(w http.ResponseWriter, r *http.Reques
 	http.Error(w, "receiver doesn't exist", http.StatusConflict)
 }
 
-func (server *http_server) videoIsRunningHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) videoIsRunningHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.IsConnected()
 	}
@@ -412,7 +412,7 @@ func generateSelfSignedCert() (certPEM, keyPEM []byte) {
 	return certPEMBlock, keyPEMBlock
 }
 
-func (server *http_server) setupTLSServer() {
+func (server *Http_server) setupTLSServer() {
 	cert, key := generateSelfSignedCert()
 	var err error
 	server.cert, err = tls.X509KeyPair(cert, key)
@@ -437,27 +437,27 @@ func (server *http_server) setupTLSServer() {
 	log.Println("HTTPS server has been started at https://localhost:8443")
 }
 
-func (server *http_server) serve() {
+func (server *Http_server) serve() {
 	err := http.Serve(server.listener, server.router)
 	if err != nil {
 		log.Fatalf("HTTPS server error: %v", err)
 	}
 }
 
-func (server *http_server) closeApp() {
+func (server *Http_server) CloseApp() {
 	server.closeMut.Lock()
 	defer server.closeMut.Unlock()
 	server.shouldBeClosed = true
 }
 
-func NewHttpServer() *http_server {
-	server := &http_server{}
+func NewHttpServer() *Http_server {
+	server := &Http_server{}
 	server.shouldBeClosed = false
 	server.wr = nil
 	return server
 }
 
-func (server *http_server) Loop() {
+func (server *Http_server) Loop() {
 	server.setupTLSServer()
 
 	go server.serve()
@@ -467,7 +467,7 @@ func (server *http_server) Loop() {
 	}
 }
 
-func (server *http_server) createDefaultReceiver(hostUrl string, login string, password string, w http.ResponseWriter) {
+func (server *Http_server) createDefaultReceiver(hostUrl string, login string, password string, w http.ResponseWriter) {
 	var err error
 	server.wr, err = receivers.NewDefaultWebrtcReceiver(hostUrl, login, password)
 	if err != nil {
