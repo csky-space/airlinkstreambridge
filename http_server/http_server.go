@@ -93,7 +93,7 @@ func (server *Http_server) webrtcCategoryHandle(w http.ResponseWriter, r *http.R
 	case "open":
 		server.openHandle(w, r)
 	case "close":
-		server.closeHandle(w, r)
+		server.CloseHandle(w, r)
 	case "createDefaultReceiver":
 		server.createDefaultReceiverHandle(w, r)
 	default:
@@ -121,7 +121,7 @@ func (server *Http_server) connectionCategoryHandle(w http.ResponseWriter, r *ht
 	case "open":
 		server.openHandle(w, r)
 	case "close":
-		server.closeHandle(w, r)
+		server.CloseHandle(w, r)
 	case "isConnected":
 		server.isConnected(w, r)
 	case "closePeer":
@@ -289,7 +289,7 @@ func (server *Http_server) openHandle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (server *Http_server) closeHandle(w http.ResponseWriter, r *http.Request) {
+func (server *Http_server) CloseHandle(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.Close()
 	}
