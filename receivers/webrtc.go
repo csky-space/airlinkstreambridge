@@ -378,6 +378,7 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 			wr.isReconnecting = false
 			//wr.reconnectMutex.Unlock()
 			wr.peerConnectTimeout.Stop()
+			wr.videoTrackTimeout.Reset(time.Second * 10)
 		case <-failed:
 			wr.videoTrackTimeout.Stop()
 			log.Println("Peer connection failed, retrying")
