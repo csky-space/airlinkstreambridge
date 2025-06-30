@@ -24,8 +24,6 @@ type UDPSender struct {
 
 func (sender *UDPSender) SetupUDP(address string, port int) error {
 	log.Printf("setup udp with %s:%d\n", address, port)
-	sender.setAddrMut.Lock()
-	defer sender.setAddrMut.Unlock()
 	if sender.socket != nil {
 		sender.socket.Close()
 	}
@@ -118,4 +116,17 @@ func NewUDPSender(address string, port int) (ISender, error) {
 	err := sender.SetupUDP(address, port)
 	go sender.udpWatchdog()
 	return sender, err
+}
+
+func (sender *UDPSender) Relaunch() {
+	sender.SetupUDP(sender.udpAddr, sender.udpNetAddr.Port)
+}
+
+func (sender *UDPSender) SetSocket(conn *net.UDPConn) {
+	sender.setAddrMut.Lock()
+	defer sender.setAddrMut.Unlock()
+	if sender.socket != nil {
+		_ = sender.socket.Close()
+	}
+	sender.socket = conn
 }

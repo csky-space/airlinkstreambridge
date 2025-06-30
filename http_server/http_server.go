@@ -480,8 +480,9 @@ func (server *Http_server) createDefaultReceiver(hostUrl string, login string, p
 			err := server.sender.Send(data)
 			if err != nil {
 				server.sender.Close()
+				server.sender.Relaunch()
 			}
-			return err
+			return nil
 		}
 		return errors.New("sender doesn't exists")
 	})

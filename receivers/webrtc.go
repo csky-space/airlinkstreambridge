@@ -72,16 +72,6 @@ type JSONCodec struct {
 	Feedbacks   []JSONRtcpFeedback `json:"feedbacks"`
 }
 
-//func (wr *WebrtcReceiver) resetChannel(ch *chan struct{}) {
-//	wr.channelsMutex.Lock()
-//	defer wr.channelsMutex.Unlock()
-//	if *ch != nil {
-//		close(*ch)
-//	}
-//
-//	*ch = make(chan struct{})
-//}
-
 func (wr *WebrtcReceiver) VideoIsRunning() bool {
 	mut := sync.Mutex{}
 	mut.Lock()
@@ -369,7 +359,7 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 	connected := wr.PeerConnected.Subscribe()
 	disconnected := wr.PeerDisconnected.Subscribe()
 	failed := wr.PeerFailed.Subscribe()
-	//closed := wr.PeerClosed.Subscribe()
+	closed := wr.PeerClosed.Subscribe()
 	for wr != nil {
 		select {
 		case <-connected:
@@ -386,6 +376,8 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 			if err != nil {
 				log.Fatalf("Failed relaunch peer with error: %v", err)
 			}
+		case <-closed:
+			wr.videoTrackTimeout.Stop()
 		case <-disconnected:
 			wr.videoTrackTimeout.Stop()
 			log.Println("Peer connection disconnected, retrying")
@@ -420,50 +412,40 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 
 	go func() {
 		for {
-			closedCh := wr.PeerClosed.Subscribe()
-			select {
-			case <-closedCh:
+			//track.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+			pkt, _, err := track.ReadRTP()
+			if err != nil {
 				wr.videoIsRunning = false
-				wr.PeerClosed.Unsubscribe(closedCh)
-				//wr.videoTrackTimeout.Stop()
+				log.Printf("ReadRTP error: %v", err)
 				return
-			default:
-				//track.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-				pkt, _, err := track.ReadRTP()
-				if err != nil {
-					wr.videoIsRunning = false
-					log.Printf("ReadRTP error: %v", err)
-					wr.PeerClosed.Unsubscribe(closedCh)
+			}
+
+			//wr.updateLastPacketTime()
+
+			raw, err := pkt.Marshal()
+			if err != nil {
+				wr.videoIsRunning = false
+				if errors.Is(err, io.EOF) {
 					return
 				}
+				log.Println("track marshal error:", err)
+				continue
+			}
+			wr.videoTrackTimeout.Reset(time.Second * 10)
+			if wr.transmitEnabled {
+				wr.videoIsRunning = true
 
-				//wr.updateLastPacketTime()
-
-				raw, err := pkt.Marshal()
+				err = wr.onRTP(raw)
 				if err != nil {
 					wr.videoIsRunning = false
-					if errors.Is(err, io.EOF) {
-						return
-					}
-					log.Println("track marshal error:", err)
-					continue
+					log.Printf("raw %v didn't write with error: %s", raw, err)
 				}
-				wr.videoTrackTimeout.Reset(time.Second * 5)
-				if wr.transmitEnabled {
-					wr.videoIsRunning = true
-
-					err = wr.onRTP(raw)
-					if err != nil {
-						wr.videoIsRunning = false
-						log.Printf("raw %v didn't write with error: %s", raw, err)
-					}
-				} else {
-					wr.videoIsRunning = false
-				}
-				wr.PeerClosed.Unsubscribe(closedCh)
+			} else {
+				wr.videoIsRunning = false
 			}
 		}
 	}()
+	wr.videoTrackTimeout.Stop()
 }
 
 func (wr *WebrtcReceiver) iceSetup() {
@@ -554,6 +536,8 @@ func (wr *WebrtcReceiver) createPeerConnection() error {
 			wr.peerConnectTimeout.Stop()
 			wr.PeerClosed.Fire()
 		case webrtc.PeerConnectionStateFailed:
+			wr.videoTrackTimeout.Stop()
+			wr.peerConnectTimeout.Stop()
 			wr.PeerFailed.Fire()
 		case webrtc.PeerConnectionStateDisconnected:
 			wr.PeerDisconnected.Fire()
