@@ -3,6 +3,7 @@ package iceconfigurator
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -59,6 +60,7 @@ func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConf
 			Resolver:  ice.customResolver,
 		}).DialContext,
 	}
+	ice.customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
 	ice.customClient = &http.Client{
 		Transport: ice.customTransport,
@@ -92,6 +94,7 @@ func (ice *ICEConfigurator) getToken(login string, password string, requestsPath
 	if err != nil {
 		return "", err
 	}
+
 	req.Header.Set("Content-Type", "application/json")
 
 	loginResponse, err := ice.customClient.Do(req)
