@@ -110,6 +110,8 @@ func (server *Http_server) videoCategoryHandle(w http.ResponseWriter, r *http.Re
 		server.stopVideoHandle(w, r)
 	case "isRunning":
 		server.videoIsRunningHandle(w, r)
+	case "getCodec":
+		server.getCodec(w, r)
 	default:
 		http.Error(w, "wrong method route "+vars["method"], http.StatusMethodNotAllowed)
 	}
@@ -180,6 +182,7 @@ func (server *Http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 	server.sender, err = senders.NewUDPSender("", reqJSON.UDPPort)
 	if err != nil {
 		http.Error(w, "udp sender creation error: "+err.Error(), http.StatusInternalServerError)
+		server.sender.Relaunch()
 		return
 	}
 
@@ -328,6 +331,10 @@ type IsConnectedResponse struct {
 	IsConnected bool `json:"isConnected"`
 }
 
+type GetCodecResponse struct {
+	Codec string `json:"codec"`
+}
+
 func (server *Http_server) isConnected(w http.ResponseWriter, r *http.Request) {
 	if server.wr != nil {
 		server.wr.IsConnected()
@@ -368,6 +375,25 @@ func (server *Http_server) videoIsRunningHandle(w http.ResponseWriter, r *http.R
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func (server *Http_server) getCodec(w http.ResponseWriter, r *http.Request) {
+	resp := GetCodecResponse{}
+	if server.wr == nil {
+		resp.Codec = "Disabled"
+	} else {
+		resp.Codec = server.wr.GetCurrentCodec()
+	}
+	w.Header().Set("Content-Type", "application/json")
+
+	err := json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		log.Printf("JSON encoding error: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("codec is: %s", resp.Codec)
 }
 
 func generateSelfSignedCert() (certPEM, keyPEM []byte) {
@@ -479,7 +505,7 @@ func (server *Http_server) createDefaultReceiver(hostUrl string, login string, p
 		if server.sender != nil {
 			err := server.sender.Send(data)
 			if err != nil {
-				server.sender.Close()
+				//server.sender.Close()
 				server.sender.Relaunch()
 			}
 			return nil

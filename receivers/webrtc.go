@@ -30,6 +30,7 @@ type WebrtcReceiver struct {
 	pc              *webrtc.PeerConnection
 	iceConfigurator *iceconfigurator.ICEConfigurator
 	s               webrtc.SettingEngine
+	currentCodec    string
 
 	lastPacketTime      time.Time
 	peerConnectTimeout  *time.Timer
@@ -83,6 +84,11 @@ func (wr *WebrtcReceiver) IsConnected() bool {
 	return wr.pc.ConnectionState() == webrtc.PeerConnectionStateConnected
 }
 
+func (wr *WebrtcReceiver) GetCurrentCodec() string {
+	log.Println("getCodec")
+	return wr.currentCodec
+}
+
 func (wr *WebrtcReceiver) SetTransmitEnabled(enabled bool) {
 	wr.transmitEnableMutex.Lock()
 	defer wr.transmitEnableMutex.Unlock()
@@ -91,6 +97,19 @@ func (wr *WebrtcReceiver) SetTransmitEnabled(enabled bool) {
 }
 
 func (wr *WebrtcReceiver) registerDefaultCodecs() error {
+	h264Codec := webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:  webrtc.MimeTypeH264,
+			ClockRate: 90000,
+			//SDPFmtpLine: "profile-level-id=42e01f;hevc-profile=1",
+			RTCPFeedback: []webrtc.RTCPFeedback{
+				{Type: "nack"},
+				{Type: "nack", Parameter: "pli"},
+				{Type: "transport-cc"},
+				{Type: "ccm", Parameter: "fir"},
+			},
+		}, PayloadType: 96,
+	}
 	h265Codec := webrtc.RTPCodecParameters{
 		RTPCodecCapability: webrtc.RTPCodecCapability{
 			MimeType:  webrtc.MimeTypeH265,
@@ -102,7 +121,7 @@ func (wr *WebrtcReceiver) registerDefaultCodecs() error {
 				{Type: "transport-cc"},
 				{Type: "ccm", Parameter: "fir"},
 			},
-		}, PayloadType: 96,
+		}, PayloadType: 100,
 	}
 
 	opusCodec := webrtc.RTPCodecParameters{
@@ -115,6 +134,10 @@ func (wr *WebrtcReceiver) registerDefaultCodecs() error {
 				{Type: "ccm", Parameter: "fir"},
 			},
 		}, PayloadType: 111,
+	}
+
+	if err := wr.mediaEngine.RegisterCodec(h264Codec, webrtc.RTPCodecTypeVideo); err != nil {
+		return err
 	}
 
 	if err := wr.mediaEngine.RegisterCodec(h265Codec, webrtc.RTPCodecTypeVideo); err != nil {
@@ -209,6 +232,7 @@ func NewWebrtcReceiver() *WebrtcReceiver {
 		PeerDisconnected:      NewEventBroadcaster(),
 		WebrtcReceiverCreated: NewEventBroadcaster(),
 		peerConnectTimeout:    time.NewTimer(1000000000 * time.Second), videoTrackTimeout: time.NewTimer(1000000000 * time.Second), iceTrickleEnabled: false,
+		currentCodec: "Disabled",
 	}
 
 	return wr
@@ -286,6 +310,17 @@ func (wr *WebrtcReceiver) onOffer(sdp string) error {
 		log.Printf("Failed to set remote description: %v", err)
 		return err
 	}
+	//offerParsed, err := wr.pc.RemoteDescription().Unmarshal()
+	//if err != nil {
+	//	log.Printf("Failed to unmarshal offer sdp: %v", err)
+	//	return err
+	//}
+
+	//if offerParsed.MediaDescriptions != nil {
+	//	for i := 0; i < len(offerParsed.MediaDescriptions); i++ {
+	//		offerParsed.MediaDescriptions[i]
+	//	}
+	//}
 
 	answer, err := wr.pc.CreateAnswer(nil)
 	if err != nil {
@@ -377,6 +412,7 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 				log.Fatalf("Failed relaunch peer with error: %v", err)
 			}
 		case <-closed:
+			wr.currentCodec = "Disabled"
 			wr.videoTrackTimeout.Stop()
 		case <-disconnected:
 			wr.videoTrackTimeout.Stop()
@@ -411,6 +447,7 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 	wr.videoTrackTimeout.Reset(time.Second * 15)
 
 	go func() {
+		wr.currentCodec = track.Codec().MimeType
 		for {
 			//track.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 			pkt, _, err := track.ReadRTP()

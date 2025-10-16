@@ -2,6 +2,7 @@ package senders
 
 import (
 	"AirlinkStreamBridge/receivers"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -29,6 +30,7 @@ func (sender *UDPSender) SetupUDP(address string, port int) error {
 	}
 
 	sender.udpAddr = address + ":" + strconv.Itoa(port)
+
 	var err error
 	//wr.udpSender, err = net.ListenPacket("udp", ":0")
 	//if err != nil {
@@ -61,12 +63,23 @@ func (sender *UDPSender) SetupUDP(address string, port int) error {
 func (sender *UDPSender) Send(data []byte) error {
 	sender.sendMut.Lock()
 	defer sender.sendMut.Unlock()
-	_, err := sender.socket.Write(data)
-	if err != nil {
-		sender.shouldReconnectEvent.Fire()
-		log.Printf("raw %v didn't write with error: %s", data, err)
-		return err
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from panic:", r)
+			sender.shouldReconnectEvent.Fire()
+		}
+	}()
+	if sender.socket != nil {
+		_, err := sender.socket.Write(data)
+		if err != nil {
+			sender.shouldReconnectEvent.Fire()
+			log.Printf("raw %v didn't write with error: %s", data, err)
+			return err
+		}
+	} else {
+		log.Println("udp socket is nil")
 	}
+
 	return nil
 }
 
@@ -87,18 +100,19 @@ func (sender *UDPSender) udpWatchdog() {
 			log.Println("try reconnect")
 			if sender != nil && sender.udpNetAddr != nil {
 				sender.setAddrMut.Lock()
+				defer sender.setAddrMut.Unlock()
 				log.Println("Reconnecting UDP...")
 				sender.Close()
 				err := sender.SetupUDP(sender.udpNetAddr.IP.String(), sender.udpNetAddr.Port)
 				if err != nil {
+					sender.shouldReconnectEvent.Fire()
 					log.Printf("Reconnect failed: %v", err)
 				}
 			} else {
 				log.Println("udpNetAddr is nil, stopping watchdog")
-				sender.setAddrMut.Unlock()
+
 				return
 			}
-			sender.setAddrMut.Unlock()
 		default:
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -119,7 +133,8 @@ func NewUDPSender(address string, port int) (ISender, error) {
 }
 
 func (sender *UDPSender) Relaunch() {
-	sender.SetupUDP(sender.udpAddr, sender.udpNetAddr.Port)
+	sender.shouldReconnectEvent.Fire()
+	//sender.SetupUDP(sender.udpAddr, sender.udpNetAddr.Port)
 }
 
 func (sender *UDPSender) SetSocket(conn *net.UDPConn) {
