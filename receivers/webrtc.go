@@ -634,6 +634,7 @@ func (wr *WebrtcReceiver) Close() {
 func (wr *WebrtcReceiver) LaunchPeer() error {
 	log.Println("LaunchPeer")
 	wr.peerConnectTimeout = time.NewTimer(20 * time.Second)
+	wr.ws.establishWs()
 	err := wr.ws.ping()
 	if err != nil {
 		return err
