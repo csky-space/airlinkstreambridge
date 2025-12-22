@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -151,5 +152,7 @@ func (ice *ICEConfigurator) getConfiguration(accessToken string, requestsPath st
 	if err != nil {
 		return err
 	}
+	strings.ReplaceAll(ice.WsURL, "/wstest", "")
+
 	return nil
 }
