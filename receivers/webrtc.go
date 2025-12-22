@@ -287,6 +287,7 @@ func (wr *WebrtcReceiver) Open() error {
 		log.Fatalf("failed on creating peer with error: %v", err)
 		return err
 	}
+	log.Println("ws is: " + wr.iceConfigurator.WsURL)
 	wr.ws, err = NewWebrtcWebsocket(wr.iceConfigurator.WsURL + "/connect?token=" + wr.iceConfigurator.Token)
 	if err != nil {
 		return err
