@@ -24,6 +24,7 @@ type WebrtcReceiver struct {
 	api         *webrtc.API
 	mediaEngine *webrtc.MediaEngine
 
+	onTelemetry     func(data []byte) error
 	onRTP           func(data []byte) error
 	ws              *Webrtc_websocket
 	lastRemoteSdp   string
@@ -59,6 +60,10 @@ type WebrtcReceiver struct {
 
 func (wr *WebrtcReceiver) SetOnData(onRTP func(data []byte) error) {
 	wr.onRTP = onRTP
+}
+
+func (wr *WebrtcReceiver) SetOnTelemetry(onTelemetry func(data []byte) error) {
+	wr.onTelemetry = onTelemetry
 }
 
 type JSONRtcpFeedback struct {
@@ -282,7 +287,7 @@ func (wr *WebrtcReceiver) Open() error {
 		log.Fatalf("failed on creating peer with error: %v", err)
 		return err
 	}
-	wr.ws, err = NewWebrtcWebsocket(wr.iceConfigurator.WsURL + "?name=GS" + wr.iceConfigurator.Login + "&partnerName=" + wr.iceConfigurator.Login)
+	wr.ws, err = NewWebrtcWebsocket(wr.iceConfigurator.WsURL + "/connect?token=" + wr.iceConfigurator.Token)
 	if err != nil {
 		return err
 	}
@@ -592,6 +597,14 @@ func (wr *WebrtcReceiver) createPeerConnection() error {
 	wr.pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		log.Printf("Track received: %s (SSRC: %d)", track.Codec().MimeType, track.SSRC())
 		wr.onTrack(track, receiver)
+	})
+
+	wr.pc.OnDataChannel(func(channel *webrtc.DataChannel) {
+		if channel.Label() == "telemetry" {
+			channel.OnMessage(func(msg webrtc.DataChannelMessage) {
+				wr.onTelemetry(msg.Data)
+			})
+		}
 	})
 
 	return nil

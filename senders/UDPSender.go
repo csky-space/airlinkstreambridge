@@ -94,27 +94,39 @@ func (sender *UDPSender) Close() {
 func (sender *UDPSender) udpWatchdog() {
 	reconnect := sender.shouldReconnectEvent.Subscribe()
 	defer sender.shouldReconnectEvent.Unsubscribe(reconnect)
+
 	for {
 		select {
 		case <-reconnect:
 			log.Println("try reconnect")
-			if sender != nil && sender.udpNetAddr != nil {
-				sender.setAddrMut.Lock()
-				defer sender.setAddrMut.Unlock()
-				log.Println("Reconnecting UDP...")
-				sender.Close()
-				err := sender.SetupUDP(sender.udpNetAddr.IP.String(), sender.udpNetAddr.Port)
-				if err != nil {
-					sender.shouldReconnectEvent.Fire()
-					log.Printf("Reconnect failed: %v", err)
-				}
-			} else {
-				log.Println("udpNetAddr is nil, stopping watchdog")
-
+			if sender == nil || sender.udpNetAddr == nil {
+				log.Println("sender or udpNetAddr is nil, stopping watchdog")
 				return
 			}
-		default:
-			time.Sleep(100 * time.Millisecond)
+
+			sender.setAddrMut.Lock()
+			log.Println("Reconnecting UDP...")
+
+			if sender.socket != nil {
+				sender.socket.Close()
+			}
+
+			var err error
+			sender.socket, err = net.DialUDP("udp", nil, sender.udpNetAddr)
+			sender.setAddrMut.Unlock()
+
+			if err != nil {
+				log.Printf("Reconnect failed: %v", err)
+				time.Sleep(2 * time.Second)
+				sender.shouldReconnectEvent.Fire()
+			} else {
+				sender.socket.SetWriteBuffer(1 << 20)
+				log.Println("Reconnected successfully")
+			}
+
+		case <-time.After(30 * time.Second):
+			if sender.socket != nil {
+			}
 		}
 	}
 }

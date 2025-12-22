@@ -28,6 +28,7 @@ type ICEConfigurator struct {
 	customResolver  *net.Resolver
 	customTransport *http.Transport
 	customClient    *http.Client
+	Token           string
 
 	TurnServers     []TurnServer `json:"turnServers"`
 	StunServers     []string     `json:"stunServers"`
@@ -69,6 +70,7 @@ func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConf
 
 	requestsPath := "https://" + hostUrl + "/api/groundStation"
 	token, err := ice.getToken(login, password, requestsPath)
+	ice.Token = token
 	if err != nil {
 		return nil, err
 	}

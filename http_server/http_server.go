@@ -48,12 +48,13 @@ type DefaultReceiver struct {
 }
 
 type Http_server struct {
-	router    *mux.Router
-	tlsConfig *tls.Config
-	cert      tls.Certificate
-	wr        *receivers.WebrtcReceiver
-	sender    senders.ISender
-	listener  net.Listener
+	router          *mux.Router
+	tlsConfig       *tls.Config
+	cert            tls.Certificate
+	wr              *receivers.WebrtcReceiver
+	sender          senders.ISender
+	telemetrySender senders.ISender
+	listener        net.Listener
 
 	closeMut       sync.Mutex
 	shouldBeClosed bool
@@ -259,6 +260,12 @@ func (server *Http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *h
 		server.sender, err = senders.NewUDPSender(udpSetup.Address, udpSetup.Port)
 		if err != nil {
 			http.Error(w, "udp sender creation error: "+err.Error(), http.StatusInternalServerError)
+			fmt.Fprintf(w, "{\"error\":\"%v\"}", err)
+		}
+
+		server.telemetrySender, err = senders.NewUDPSender("127.0.0.1", 14550)
+		if err != nil {
+			http.Error(w, "Telemetry udp sender creation error: "+err.Error(), http.StatusInternalServerError)
 			fmt.Fprintf(w, "{\"error\":\"%v\"}", err)
 		}
 
@@ -511,6 +518,16 @@ func (server *Http_server) createDefaultReceiver(hostUrl string, login string, p
 			return nil
 		}
 		return errors.New("sender doesn't exists")
+	})
+	server.wr.SetOnTelemetry(func(data []byte) error {
+		if server.telemetrySender != nil {
+			err := server.telemetrySender.Send(data)
+			if err != nil {
+				server.telemetrySender.Relaunch()
+			}
+			return nil
+		}
+		return errors.New("Telemetry sender doesn't exists")
 	})
 	log.Println("http complete creating")
 	subscriber := server.wr.WebrtcReceiverCreated.Subscribe()
