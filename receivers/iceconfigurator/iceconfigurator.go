@@ -16,6 +16,7 @@ import (
 type PostResponse struct {
 	AccessToken string `json:"accessToken"`
 	Username    string `json:"username"`
+	Token       string `json:"token"`
 }
 
 type TurnServer struct {
@@ -50,7 +51,7 @@ func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConf
 			d := &net.Dialer{
 				Timeout: time.Second * 2,
 			}
-			return d.DialContext(ctx, network, "8.8.8.8:53") // Google DNS
+			return d.DialContext(ctx, network, "192.168.3.1:53")
 		},
 	}
 
@@ -60,8 +61,8 @@ func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConf
 			KeepAlive: 30 * time.Second,
 			Resolver:  ice.customResolver,
 		}).DialContext,
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	ice.customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
 	ice.customClient = &http.Client{
 		Transport: ice.customTransport,
@@ -70,7 +71,6 @@ func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConf
 
 	requestsPath := "https://" + hostUrl + "/api/groundStation"
 	token, err := ice.getToken(login, password, requestsPath)
-	ice.Token = token
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (ice *ICEConfigurator) getToken(login string, password string, requestsPath
 	if err != nil {
 		return "", err
 	}
-
+	ice.Token = accessToken.Token
 	return accessToken.AccessToken, nil
 }
 

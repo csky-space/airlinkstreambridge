@@ -3,9 +3,11 @@ package receivers
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -82,6 +84,7 @@ func NewWebrtcWebsocket(wsUrl string) (*Webrtc_websocket, error) {
 			KeepAlive: 30 * time.Second,
 			Resolver:  ws.customResolver,
 		}).DialContext,
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	err := ws.establishWs()
 	if err != nil {
@@ -234,6 +237,9 @@ func (ws *Webrtc_websocket) connectionWatchdog() {
 }
 
 func (ws *Webrtc_websocket) open() error {
+	requestHeader := http.Header{}
+	requestHeader.Set("User-Agent", "Mozilla/5.0 (Go-Client)")
+	requestHeader.Set("Origin", "https://stage.air-link.pace")
 	wsConn, _, err := ws.customDialer.Dial(ws.wsUrl, nil)
 	if err != nil {
 		return err

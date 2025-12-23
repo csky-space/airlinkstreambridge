@@ -289,8 +289,9 @@ func (wr *WebrtcReceiver) Open() error {
 		return err
 	}
 	wr.iceConfigurator.WsURL = strings.ReplaceAll(wr.iceConfigurator.WsURL, "wstest", "connect?token=")
-	log.Println("ws is: " + wr.iceConfigurator.WsURL)
+
 	wr.ws, err = NewWebrtcWebsocket(wr.iceConfigurator.WsURL + wr.iceConfigurator.Token)
+	log.Println("ws is: " + wr.iceConfigurator.WsURL + wr.iceConfigurator.Token)
 	if err != nil {
 		return err
 	}
