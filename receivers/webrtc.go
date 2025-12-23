@@ -301,6 +301,7 @@ func (wr *WebrtcReceiver) Open() error {
 	wr.ws.SetOnPing(func() {
 		wr.ws.startSignalling()
 	})
+	wr.ws.ping()
 	log.Println("peer connection going")
 	go wr.peerConnectionWatchdog()
 	return nil
