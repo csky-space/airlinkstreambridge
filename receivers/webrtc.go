@@ -9,10 +9,12 @@ import (
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/pion/ice/v4"
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/intervalpli"
 	"github.com/pion/logging"
@@ -219,15 +221,18 @@ func (wr *WebrtcReceiver) Configure(hostUrl string, login string, password strin
 	loggingFactory := logging.NewDefaultLoggerFactory()
 	loggingFactory.DefaultLogLevel.Set(logging.LogLevelTrace)
 	s := webrtc.SettingEngine{
-		//LoggerFactory: loggingFactory,
+		LoggerFactory: loggingFactory,
 	}
+	s.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
+	s.SetEphemeralUDPPortRange(33000, 39000)
 	s.SetICETimeouts(5*time.Second, 30*time.Second, 5*time.Second)
+	s.SetDTLSDisableInsecureSkipVerify(false)
 	s.SetIPFilter(func(ip net.IP) bool {
 		return ip.To4() != nil
 	})
+	s.SetFireOnTrackBeforeFirstRTP(true)
 	wr.s = s
 	return nil
-	//s.SetFireOnTrackBeforeFirstRTP(true)
 }
 
 func NewWebrtcReceiver() *WebrtcReceiver {
@@ -299,9 +304,26 @@ func (wr *WebrtcReceiver) Open() error {
 	wr.ws.SetOnOffer(wr.onOffer)
 	wr.ws.SetOnRemoteCandidate(wr.ws.onRemoteCandidate)
 	wr.ws.SetOnPing(func() {
+		log.Println("Signalling started!")
 		wr.ws.startSignalling()
 	})
-	wr.ws.ping()
+
+	//go func() {
+	//	log.Println("Hello from ping spamer!")
+	//	for {
+	//		err = wr.ws.ping()
+	//		if err != nil {
+	//			log.Println("Failed to open webrtc output on ping websocket: " + err.Error())
+	//		}
+	//		time.Sleep(time.Millisecond * 500)
+	//	}
+	//}()
+	log.Println("Launching ping...")
+	err = wr.ws.ping()
+	if err != nil {
+		log.Println("Failed to open webrtc output on ping websocket: " + err.Error())
+		return err
+	}
 	log.Println("peer connection going")
 	go wr.peerConnectionWatchdog()
 	return nil
@@ -540,11 +562,18 @@ func (wr *WebrtcReceiver) iceSetup() {
 func (wr *WebrtcReceiver) createPeerConnection() error {
 	iceServers := []webrtc.ICEServer{}
 	for i := 0; i < len(wr.iceConfigurator.StunServers); i++ {
+		log.Println("stun is: " + string(wr.iceConfigurator.StunServers[i]))
 		iceServers = append(iceServers, webrtc.ICEServer{
 			URLs: []string{wr.iceConfigurator.StunServers[i]},
 		})
 	}
+	log.Println("Hello from our stuns!")
+	//iceServers = append(iceServers, webrtc.ICEServer{
+	//	URLs: []string{"stun:stun.l.google.com:19302"},
+	//})
+
 	for i := 0; i < len(wr.iceConfigurator.TurnServers); i++ {
+		log.Println("turn is " + "(count " + strconv.Itoa(len(wr.iceConfigurator.TurnServers)) + "): " + string(wr.iceConfigurator.TurnServers[i].URL))
 		iceServers = append(iceServers, webrtc.ICEServer{
 			URLs:           []string{wr.iceConfigurator.TurnServers[i].URL},
 			Username:       wr.iceConfigurator.TurnServers[i].Username,
@@ -554,7 +583,9 @@ func (wr *WebrtcReceiver) createPeerConnection() error {
 	}
 
 	pc, err := wr.api.NewPeerConnection(webrtc.Configuration{
-		ICETransportPolicy: webrtc.ICETransportPolicyAll,
+		ICETransportPolicy: webrtc.ICETransportPolicyRelay,
+		BundlePolicy:       webrtc.BundlePolicyMaxBundle,
+		RTCPMuxPolicy:      webrtc.RTCPMuxPolicyRequire,
 		ICEServers:         iceServers,
 	})
 	if err != nil {
@@ -565,13 +596,6 @@ func (wr *WebrtcReceiver) createPeerConnection() error {
 	wr.pc = pc
 
 	wr.iceSetup()
-
-	wr.pc.OnDataChannel(func(dc *webrtc.DataChannel) {
-		log.Printf("dc: %s", dc.Label())
-		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-			log.Printf("dc message: %s", msg.Data)
-		})
-	})
 
 	wr.pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		log.Printf("PeerConnection State changed: %s", state)
@@ -605,6 +629,7 @@ func (wr *WebrtcReceiver) createPeerConnection() error {
 	})
 
 	wr.pc.OnDataChannel(func(channel *webrtc.DataChannel) {
+		log.Println("Catch dc: " + channel.Label())
 		if channel.Label() == "telemetry" {
 			channel.OnMessage(func(msg webrtc.DataChannelMessage) {
 				wr.onTelemetry(msg.Data)
@@ -652,9 +677,17 @@ func (wr *WebrtcReceiver) Close() {
 func (wr *WebrtcReceiver) LaunchPeer() error {
 	log.Println("LaunchPeer")
 	wr.peerConnectTimeout = time.NewTimer(20 * time.Second)
-	wr.ws.establishWs()
+	if !wr.ws.IsOpen() {
+		err := wr.ws.establishWs()
+		if err != nil {
+			log.Println("Launch peer error on establishing websocket: " + err.Error())
+			return err
+		}
+	}
+
 	err := wr.ws.ping()
 	if err != nil {
+		log.Println("Launch peer error on ping websocket: " + err.Error())
 		return err
 	}
 	return nil
@@ -664,6 +697,7 @@ func (wr *WebrtcReceiver) ReLaunchPeer() error {
 	if (wr.pc != nil) && (wr.pc.ConnectionState() == webrtc.PeerConnectionStateConnecting) && (wr.pc.ConnectionState() == webrtc.PeerConnectionStateConnected) {
 		wr.PeerClose()
 	}
+
 	err := wr.createPeerConnection()
 	if err != nil {
 		return err

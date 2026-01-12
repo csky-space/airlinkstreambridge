@@ -51,7 +51,7 @@ func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConf
 			d := &net.Dialer{
 				Timeout: time.Second * 2,
 			}
-			return d.DialContext(ctx, network, "192.168.3.1:53")
+			return d.DialContext(ctx, network, "8.8.8.8:53")
 		},
 	}
 
