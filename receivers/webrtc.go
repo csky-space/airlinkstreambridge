@@ -230,7 +230,7 @@ func (wr *WebrtcReceiver) Configure(hostUrl string, login string, password strin
 	s.SetIPFilter(func(ip net.IP) bool {
 		return ip.To4() != nil
 	})
-	s.SetFireOnTrackBeforeFirstRTP(true)
+	//s.SetFireOnTrackBeforeFirstRTP(true)
 	wr.s = s
 	return nil
 }
