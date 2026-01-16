@@ -478,7 +478,7 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 }
 
 func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-	if track.Kind() != webrtc.RTPCodecTypeVideo {
+	if track.Kind() != webrtc.RTPCodecTypeVideo && track.SSRC() == 42 {
 		return
 	}
 
@@ -486,6 +486,9 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 
 	go func() {
 		wr.currentCodec = track.Codec().MimeType
+		if wr.currentCodec == "" {
+			wr.currentCodec = "Disabled"
+		}
 		for {
 			//track.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 			pkt, _, err := track.ReadRTP()
