@@ -510,6 +510,7 @@ func (server *Http_server) createDefaultReceiver(hostUrl string, login string, p
 	}
 	server.wr.SetOnData(func(data []byte) error {
 		if server.sender != nil {
+			//log.Println("asb: receive and send byte")
 			err := server.sender.Send(data)
 			if err != nil {
 				//server.sender.Close()

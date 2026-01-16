@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+        "log"
 	"io"
 	"net"
 	"net/http"
@@ -30,6 +31,7 @@ type ICEConfigurator struct {
 	customTransport *http.Transport
 	customClient    *http.Client
 	Token           string
+        Host            string
 
 	TurnServers     []TurnServer `json:"turnServers"`
 	StunServers     []string     `json:"stunServers"`
@@ -44,7 +46,7 @@ type ICEConfigurator struct {
 func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConfigurator, error) {
 
 	ice := &ICEConfigurator{Login: login}
-
+        ice.Host = hostUrl
 	ice.customResolver = &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -124,6 +126,7 @@ func (ice *ICEConfigurator) getToken(login string, password string, requestsPath
 	if err != nil {
 		return "", err
 	}
+        log.Println("token is" + ice.Token)
 	ice.Token = accessToken.Token
 	return accessToken.AccessToken, nil
 }

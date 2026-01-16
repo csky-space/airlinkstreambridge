@@ -293,10 +293,16 @@ func (wr *WebrtcReceiver) Open() error {
 		log.Fatalf("failed on creating peer with error: %v", err)
 		return err
 	}
-	wr.iceConfigurator.WsURL = strings.ReplaceAll(wr.iceConfigurator.WsURL, "wstest", "connect?token=")
+	wsUrlResult := wr.iceConfigurator.WsURL
+	if wr.iceConfigurator.Token != "" {
+		wr.iceConfigurator.WsURL = strings.ReplaceAll(wr.iceConfigurator.WsURL, "wstest", "connect?token=")
+		wsUrlResult = wr.iceConfigurator.WsURL + wr.iceConfigurator.Token
+	} else {
+		wsUrlResult = wr.iceConfigurator.WsURL + "?name=GS00191&partnerName=00191"
+	}
 
-	wr.ws, err = NewWebrtcWebsocket(wr.iceConfigurator.WsURL + wr.iceConfigurator.Token)
-	log.Println("ws is: " + wr.iceConfigurator.WsURL + wr.iceConfigurator.Token)
+	wr.ws, err = NewWebrtcWebsocket(wsUrlResult)
+	log.Println("ws is: " + wsUrlResult)
 	if err != nil {
 		return err
 	}
@@ -472,7 +478,7 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 }
 
 func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-	if (track.Kind() != webrtc.RTPCodecTypeVideo) && (track.SSRC() == 42) {
+	if track.Kind() != webrtc.RTPCodecTypeVideo {
 		return
 	}
 
