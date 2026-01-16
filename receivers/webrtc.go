@@ -485,12 +485,12 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 	wr.videoTrackTimeout.Reset(time.Second * 15)
 
 	go func() {
-		wr.currentCodec = track.Codec().MimeType
-		if wr.currentCodec == "" {
-			wr.currentCodec = "Disabled"
-		}
 		for {
 			//track.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+			wr.currentCodec = track.Codec().MimeType
+			if wr.currentCodec == "" {
+				wr.currentCodec = "Disabled"
+			}
 			pkt, _, err := track.ReadRTP()
 			if err != nil {
 				wr.videoIsRunning = false
