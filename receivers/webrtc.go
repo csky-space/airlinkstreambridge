@@ -478,7 +478,7 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 }
 
 func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-	if track.Kind() != webrtc.RTPCodecTypeVideo && track.SSRC() != 42 {
+	if track.Kind() != webrtc.RTPCodecTypeVideo || track.SSRC() != 42 {
 		return
 	}
 
