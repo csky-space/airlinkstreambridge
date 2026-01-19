@@ -93,7 +93,7 @@ func (wr *WebrtcReceiver) IsConnected() bool {
 }
 
 func (wr *WebrtcReceiver) GetCurrentCodec() string {
-	log.Println("getCodec")
+	log.Println("getCodec. codec is: " + wr.currentCodec)
 	return wr.currentCodec
 }
 
@@ -478,7 +478,7 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 }
 
 func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-	if track.Kind() != webrtc.RTPCodecTypeVideo && track.SSRC() == 42 {
+	if track.Kind() != webrtc.RTPCodecTypeVideo && track.SSRC() != 42 {
 		return
 	}
 
