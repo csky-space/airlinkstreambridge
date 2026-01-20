@@ -59,6 +59,7 @@ type WebrtcReceiver struct {
 	transmitEnabled   bool
 	videoIsRunning    bool
 	iceTrickleEnabled bool
+	isRTPFailed       bool
 }
 
 func (wr *WebrtcReceiver) SetOnData(onRTP func(data []byte) error) {
@@ -244,6 +245,7 @@ func NewWebrtcReceiver() *WebrtcReceiver {
 		WebrtcReceiverCreated: NewEventBroadcaster(),
 		peerConnectTimeout:    time.NewTimer(1000000000 * time.Second), videoTrackTimeout: time.NewTimer(1000000000 * time.Second), iceTrickleEnabled: false,
 		currentCodec: "Disabled",
+		isRTPFailed:  false,
 	}
 
 	return wr
@@ -451,7 +453,10 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 			}
 		case <-closed:
 			wr.currentCodec = "Disabled"
-			wr.videoTrackTimeout.Stop()
+			if !wr.isRTPFailed {
+				wr.videoTrackTimeout.Stop()
+				wr.isRTPFailed = false
+			}
 		case <-disconnected:
 			wr.videoTrackTimeout.Stop()
 			log.Println("Peer connection disconnected, retrying")
@@ -493,6 +498,7 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 			}
 			pkt, _, err := track.ReadRTP()
 			if err != nil {
+				wr.isRTPFailed = true
 				wr.videoIsRunning = false
 				log.Printf("ReadRTP error: %v", err)
 				return
