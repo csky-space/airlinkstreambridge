@@ -456,9 +456,15 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 			}
 		case <-closed:
 			wr.currentCodec = "Disabled"
-			if wr.isOurDisconnect {
-				wr.videoTrackTimeout.Stop()
-				wr.isRTPFailed = false
+			log.Println("Peer connection closed")
+			wr.videoTrackTimeout.Stop()
+			wr.isRTPFailed = false
+			if !wr.isOurDisconnect {
+				err := wr.ReLaunchPeer()
+				if err != nil {
+					log.Fatalf("Failed relaunch peer with error: %v", err)
+				}
+				log.Println("retrying")
 			}
 		case <-disconnected:
 			wr.videoTrackTimeout.Stop()
@@ -731,7 +737,7 @@ func (wr *WebrtcReceiver) ReLaunchPeer() error {
 
 func (wr *WebrtcReceiver) wsClose() {
 	if wr.ws != nil {
-		go wr.ws.Close()
+		wr.ws.Close()
 	}
 }
 
@@ -740,12 +746,10 @@ func (wr *WebrtcReceiver) PeerClose() {
 	wr.peerConnectTimeout.Stop()
 	wr.videoTrackTimeout.Stop()
 	if wr.pc != nil {
-		go wr.pc.Close()
+		wr.pc.Close()
 	}
-	sub := wr.PeerClosed.Subscribe()
 
 	log.Println("peer closed")
-	wr.PeerClosed.Unsubscribe(sub)
 }
 
 func (wr *WebrtcReceiver) WsIsOpen() bool {

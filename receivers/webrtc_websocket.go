@@ -98,9 +98,8 @@ func NewWebrtcWebsocket(wsUrl string) (*Webrtc_websocket, error) {
 func (ws *Webrtc_websocket) establishWs() error {
 	log.Println("Enter establish ws")
 	if ws.isConnected == true {
-		ws.wsConn.Close()
+		ws.Close()
 		log.Println("Wait for close")
-		<-ws.ClosedExpectedly.Subscribe()
 	}
 	err := ws.open()
 	if err != nil {
@@ -111,7 +110,7 @@ func (ws *Webrtc_websocket) establishWs() error {
 		ws.isConnected = false
 		switch code {
 		case websocket.CloseAbnormalClosure:
-			log.Println("websocket unexpectedly closed! + text")
+			log.Println("websocket unexpectedly closed! " + text)
 			ws.ClosedUnexpectedly.Fire()
 		case websocket.CloseInternalServerErr:
 			log.Println("websocket closed due to: internal server Err! " + text)
@@ -162,7 +161,7 @@ func (ws *Webrtc_websocket) readMessages() {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
-			ws.wsConn.Close()
+			ws.Close()
 			return
 			//ws.ClosedUnexpectedly.Fire()
 		}
@@ -230,6 +229,7 @@ func (ws *Webrtc_websocket) IsOpen() bool {
 
 func (ws *Webrtc_websocket) Close() {
 	if ws.wsConn != nil {
+		ws.isConnected = false
 		ws.wsConn.Close()
 		sub := ws.ClosedExpectedly.Subscribe()
 		<-sub
