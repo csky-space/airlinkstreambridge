@@ -84,21 +84,23 @@ func (server *Http_server) categoryHandle(w http.ResponseWriter, r *http.Request
 func (server *Http_server) webrtcCategoryHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("webrtc handle")
 	vars := mux.Vars(r)
-	switch vars["method"] {
-	case "configure":
-		server.configureHandle(w, r)
-	case "setupOutputProtocol":
-		server.setupOutputProtocolHandle(w, r)
-	case "setupCodecs":
-		server.setupCodecsHandle(w, r)
-	case "open":
-		server.openHandle(w, r)
-	case "close":
-		server.CloseHandle(w, r)
-	case "createDefaultReceiver":
-		server.createDefaultReceiverHandle(w, r)
-	default:
-		http.Error(w, "wrong method route "+vars["method"], http.StatusMethodNotAllowed)
+	if len(vars) != 0 {
+		switch vars["method"] {
+		case "configure":
+			server.configureHandle(w, r)
+		case "setupOutputProtocol":
+			server.setupOutputProtocolHandle(w, r)
+		case "setupCodecs":
+			server.setupCodecsHandle(w, r)
+		case "open":
+			server.openHandle(w, r)
+		case "close":
+			server.CloseHandle(w, r)
+		case "createDefaultReceiver":
+			server.createDefaultReceiverHandle(w, r)
+		default:
+			http.Error(w, "wrong method route "+vars["method"], http.StatusMethodNotAllowed)
+		}
 	}
 }
 
@@ -373,6 +375,11 @@ func (server *Http_server) stopVideoHandle(w http.ResponseWriter, r *http.Reques
 }
 
 func (server *Http_server) videoIsRunningHandle(w http.ResponseWriter, r *http.Request) {
+	if server.wr == nil {
+		http.Error(w, "receiver doesn't exist", http.StatusConflict)
+		return
+	}
+
 	if server.wr != nil {
 		server.wr.IsConnected()
 	}

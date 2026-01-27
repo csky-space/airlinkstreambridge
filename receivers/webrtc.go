@@ -60,6 +60,7 @@ type WebrtcReceiver struct {
 	videoIsRunning    bool
 	iceTrickleEnabled bool
 	isRTPFailed       bool
+	isOurDisconnect   bool
 }
 
 func (wr *WebrtcReceiver) SetOnData(onRTP func(data []byte) error) {
@@ -244,8 +245,9 @@ func NewWebrtcReceiver() *WebrtcReceiver {
 		PeerDisconnected:      NewEventBroadcaster(),
 		WebrtcReceiverCreated: NewEventBroadcaster(),
 		peerConnectTimeout:    time.NewTimer(1000000000 * time.Second), videoTrackTimeout: time.NewTimer(1000000000 * time.Second), iceTrickleEnabled: false,
-		currentCodec: "Disabled",
-		isRTPFailed:  false,
+		currentCodec:    "Disabled",
+		isRTPFailed:     false,
+		isOurDisconnect: false,
 	}
 
 	return wr
@@ -300,7 +302,8 @@ func (wr *WebrtcReceiver) Open() error {
 		wr.iceConfigurator.WsURL = strings.ReplaceAll(wr.iceConfigurator.WsURL, "wstest", "connect?token=")
 		wsUrlResult = wr.iceConfigurator.WsURL + wr.iceConfigurator.Token
 	} else {
-		wsUrlResult = wr.iceConfigurator.WsURL + "?name=GS00191&partnerName=00191"
+		wsUrlResult = wr.iceConfigurator.WsURL + "?name=GS" + wr.iceConfigurator.Login +
+			"&partnerName=" + wr.iceConfigurator.Login
 	}
 
 	wr.ws, err = NewWebrtcWebsocket(wsUrlResult)
@@ -453,7 +456,7 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 			}
 		case <-closed:
 			wr.currentCodec = "Disabled"
-			if !wr.isRTPFailed {
+			if wr.isOurDisconnect {
 				wr.videoTrackTimeout.Stop()
 				wr.isRTPFailed = false
 			}
@@ -691,6 +694,7 @@ func (wr *WebrtcReceiver) Close() {
 
 func (wr *WebrtcReceiver) LaunchPeer() error {
 	log.Println("LaunchPeer")
+	wr.isOurDisconnect = false
 	wr.peerConnectTimeout = time.NewTimer(20 * time.Second)
 	if !wr.ws.IsOpen() {
 		err := wr.ws.establishWs()
@@ -732,6 +736,7 @@ func (wr *WebrtcReceiver) wsClose() {
 }
 
 func (wr *WebrtcReceiver) PeerClose() {
+	wr.isOurDisconnect = true
 	wr.peerConnectTimeout.Stop()
 	wr.videoTrackTimeout.Stop()
 	if wr.pc != nil {
