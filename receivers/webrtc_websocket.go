@@ -215,11 +215,13 @@ func (ws *Webrtc_websocket) ping() error {
 func (ws *Webrtc_websocket) request() error {
 	message := Request{ID: id, Type: "request"}
 	messageJSON, _ := json.Marshal(message)
+	log.Println("We sent request: " + string(messageJSON))
 	err := ws.WriteMessage(messageJSON)
 	if err != nil {
+		log.Println("Error on send request: " + err.Error())
 		return err
 	}
-	log.Println(messageJSON)
+
 	return nil
 }
 
@@ -231,9 +233,6 @@ func (ws *Webrtc_websocket) Close() {
 	if ws.wsConn != nil {
 		ws.isConnected = false
 		ws.wsConn.Close()
-		sub := ws.ClosedExpectedly.Subscribe()
-		<-sub
-		ws.ClosedExpectedly.Unsubscribe(sub)
 	}
 }
 
@@ -310,15 +309,17 @@ func (ws *Webrtc_websocket) SingleShotOnPing(onPing func()) {
 	timeout := time.After(3 * time.Second)
 	ticker := time.NewTicker(100 * time.Millisecond)
 
-	for {
-		select {
-		case <-ticker.C:
-		case <-timeout:
-			ws.onPing = onPingOriginal
-			return
-		case <-ws.Pinged.Subscribe():
-			ws.onPing = onPingOriginal
-			return
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+			case <-timeout:
+				ws.onPing = onPingOriginal
+				return
+			case <-ws.Pinged.Subscribe():
+				ws.onPing = onPingOriginal
+				return
+			}
 		}
-	}
+	}()
 }

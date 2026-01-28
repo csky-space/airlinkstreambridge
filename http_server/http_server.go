@@ -509,6 +509,11 @@ func (server *Http_server) Loop() {
 
 func (server *Http_server) createDefaultReceiver(hostUrl string, login string, password string, w http.ResponseWriter) {
 	var err error
+	if server.wr != nil {
+		server.wr.Close()
+		server.wr = nil
+	}
+
 	server.wr, err = receivers.NewDefaultWebrtcReceiver(hostUrl, login, password)
 	if err != nil {
 		log.Println("default receiver creation error "+err.Error(), http.StatusInternalServerError)
