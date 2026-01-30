@@ -511,6 +511,7 @@ func (server *Http_server) createDefaultReceiver(hostUrl string, login string, p
 	var err error
 	if server.wr != nil {
 		server.wr.Close()
+		server.wr.StopWatching()
 		server.wr = nil
 	}
 
@@ -543,16 +544,7 @@ func (server *Http_server) createDefaultReceiver(hostUrl string, login string, p
 		return errors.New("Telemetry sender doesn't exists")
 	})
 	log.Println("http complete creating")
-	subscriber := server.wr.WebrtcReceiverCreated.Subscribe()
-	select {
-	case <-subscriber:
-		log.Println("p open")
-		fmt.Fprint(w, `{"success":true}`)
-	case <-time.After(20 * time.Second):
-		log.Println("timeout waiting for creating webrtc")
-		http.Error(w, "webrtcreceiver creating timeout", http.StatusInternalServerError)
-	}
-	server.wr.WebrtcReceiverCreated.Unsubscribe(subscriber)
+
 	fmt.Fprintf(w, "{\"success\":true}")
 	log.Println("webrtc cl")
 }

@@ -52,6 +52,7 @@ type WebrtcReceiver struct {
 	PeerFailed            *EventBroadcaster
 	PeerDisconnected      *EventBroadcaster
 	WebrtcReceiverCreated *EventBroadcaster
+	WatchdogStopRequest   *EventBroadcaster
 
 	channelsMutex sync.Mutex
 
@@ -244,6 +245,7 @@ func NewWebrtcReceiver() *WebrtcReceiver {
 		PeerFailed:            NewEventBroadcaster(),
 		PeerDisconnected:      NewEventBroadcaster(),
 		WebrtcReceiverCreated: NewEventBroadcaster(),
+		WatchdogStopRequest:   NewEventBroadcaster(),
 		peerConnectTimeout:    time.NewTimer(1000000000 * time.Second), videoTrackTimeout: time.NewTimer(1000000000 * time.Second), iceTrickleEnabled: false,
 		currentCodec:    "Disabled",
 		isRTPFailed:     false,
@@ -431,12 +433,12 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 		return
 	}
 	wr.isReconnecting = true
-	wr.WebrtcReceiverCreated.Fire()
 
 	connected := wr.PeerConnected.Subscribe()
 	disconnected := wr.PeerDisconnected.Subscribe()
 	failed := wr.PeerFailed.Subscribe()
 	closed := wr.PeerClosed.Subscribe()
+	stopRequested := wr.WatchdogStopRequest.Subscribe()
 	for wr != nil {
 		select {
 		case <-connected:
@@ -486,7 +488,10 @@ func (wr *WebrtcReceiver) peerConnectionWatchdog() {
 			if err != nil {
 				log.Fatalf("Failed relaunch peer with error: %v", err)
 			}
+		case <-stopRequested:
+			return
 		default:
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 }
@@ -691,12 +696,17 @@ func NewDefaultWebrtcReceiver(hostUrl string, login string, password string) (*W
 		return nil, err
 	}
 	wr.SetTransmitEnabled(true)
+	wr.WebrtcReceiverCreated.Fire()
 	return wr, nil
 }
 
 func (wr *WebrtcReceiver) Close() {
 	wr.PeerClose()
 	wr.wsClose()
+}
+
+func (wr *WebrtcReceiver) StopWatching() {
+	wr.WatchdogStopRequest.Fire()
 }
 
 func (wr *WebrtcReceiver) LaunchPeer() error {
