@@ -41,10 +41,11 @@ type UDPProtocol struct {
 }
 
 type DefaultReceiver struct {
-	HostName  string `json:"hostName"`
-	ModemName string `json:"modemName"`
-	Password  string `json:"password"`
-	UDPPort   int    `json:"UDPPort"`
+	HostName      string `json:"hostName"`
+	ModemName     string `json:"modemName"`
+	Password      string `json:"password"`
+	UDPPort       int    `json:"UDPPort"`
+	IcePolicyType string `json:"IcePolicy"`
 }
 
 type Http_server struct {
@@ -58,6 +59,10 @@ type Http_server struct {
 
 	closeMut       sync.Mutex
 	shouldBeClosed bool
+}
+
+type IceTransportPolicy struct {
+	IcePolicy string `json:"IcePolicy"`
 }
 
 func rootHandle(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +97,8 @@ func (server *Http_server) webrtcCategoryHandle(w http.ResponseWriter, r *http.R
 			server.setupOutputProtocolHandle(w, r)
 		case "setupCodecs":
 			server.setupCodecsHandle(w, r)
+		case "setupTransportPolicy":
+			server.setupTransportPolicy(w, r)
 		case "open":
 			server.openHandle(w, r)
 		case "close":
@@ -193,7 +200,7 @@ func (server *Http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 		server.wr.Close()
 		server.wr = nil
 	}
-	server.createDefaultReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password, w)
+	server.createDefaultReceiver(reqJSON.HostName, reqJSON.ModemName, reqJSON.Password, reqJSON.IcePolicyType, w)
 }
 
 //func (server *Http_server) outputCategoryHandle(w http.ResponseWriter, r *http.Request) {
@@ -219,6 +226,25 @@ func (server *Http_server) setupCodecsHandle(w http.ResponseWriter, r *http.Requ
 	err = server.wr.SetupCodecs(codecs)
 	if err != nil {
 		http.Error(w, "can't setup codecs: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprintf(w, "{\"success\":true}")
+	r.Body.Close()
+}
+
+func (server *Http_server) setupTransportPolicy(w http.ResponseWriter, r *http.Request) {
+	var policy IceTransportPolicy
+
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&policy)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	err = server.wr.SetIceTransportPolicy(policy.IcePolicy)
+	if err != nil {
+		http.Error(w, "can't setup IceTransportPolicy: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	fmt.Fprintf(w, "{\"success\":true}")
@@ -507,7 +533,7 @@ func (server *Http_server) Loop() {
 	}
 }
 
-func (server *Http_server) createDefaultReceiver(hostUrl string, login string, password string, w http.ResponseWriter) {
+func (server *Http_server) createDefaultReceiver(hostUrl string, login string, password string, policy string, w http.ResponseWriter) {
 	var err error
 	if server.wr != nil {
 		server.wr.Close()
@@ -515,7 +541,7 @@ func (server *Http_server) createDefaultReceiver(hostUrl string, login string, p
 		server.wr = nil
 	}
 
-	server.wr, err = receivers.NewDefaultWebrtcReceiver(hostUrl, login, password)
+	server.wr, err = receivers.NewDefaultWebrtcReceiver(hostUrl, login, password, policy)
 	if err != nil {
 		log.Println("default receiver creation error "+err.Error(), http.StatusInternalServerError)
 		http.Error(w, "default receiver creation error "+err.Error(), http.StatusInternalServerError)

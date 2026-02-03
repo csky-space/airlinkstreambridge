@@ -35,6 +35,7 @@ type WebrtcReceiver struct {
 	iceConfigurator *iceconfigurator.ICEConfigurator
 	s               webrtc.SettingEngine
 	currentCodec    string
+	transportPolicy string
 
 	lastPacketTime      time.Time
 	peerConnectTimeout  *time.Timer
@@ -62,6 +63,16 @@ type WebrtcReceiver struct {
 	iceTrickleEnabled bool
 	isRTPFailed       bool
 	isOurDisconnect   bool
+}
+
+func (wr *WebrtcReceiver) SetIceTransportPolicy(policy string) error {
+	if wr != nil {
+		log.Println("Received policy in WebrtcReceiver::SetIceTransportPolicy: " + policy)
+		wr.transportPolicy = policy
+		wr.ReLaunchPeer()
+		return nil
+	}
+	return errors.New("Webrtc receiver not created yet")
 }
 
 func (wr *WebrtcReceiver) SetOnData(onRTP func(data []byte) error) {
@@ -228,7 +239,7 @@ func (wr *WebrtcReceiver) Configure(hostUrl string, login string, password strin
 	}
 	s.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
 	s.SetEphemeralUDPPortRange(33000, 39000)
-	s.SetICETimeouts(5*time.Second, 30*time.Second, 5*time.Second)
+	s.SetICETimeouts(30*time.Second, 20*time.Second, 10*time.Second)
 	s.SetDTLSDisableInsecureSkipVerify(false)
 	s.SetIPFilter(func(ip net.IP) bool {
 		return ip.To4() != nil
@@ -238,7 +249,7 @@ func (wr *WebrtcReceiver) Configure(hostUrl string, login string, password strin
 	return nil
 }
 
-func NewWebrtcReceiver() *WebrtcReceiver {
+func NewWebrtcReceiver(policy string) *WebrtcReceiver {
 	wr := &WebrtcReceiver{
 		PeerClosed:            NewEventBroadcaster(),
 		PeerConnected:         NewEventBroadcaster(),
@@ -250,6 +261,7 @@ func NewWebrtcReceiver() *WebrtcReceiver {
 		currentCodec:    "Disabled",
 		isRTPFailed:     false,
 		isOurDisconnect: false,
+		transportPolicy: policy,
 	}
 
 	return wr
@@ -610,12 +622,13 @@ func (wr *WebrtcReceiver) createPeerConnection() error {
 			CredentialType: webrtc.ICECredentialTypePassword,
 		})
 	}
-
+	log.Println("Transport policy in ASB: " + wr.transportPolicy)
 	pc, err := wr.api.NewPeerConnection(webrtc.Configuration{
-		ICETransportPolicy: webrtc.ICETransportPolicyRelay,
+		ICETransportPolicy: webrtc.NewICETransportPolicy(wr.transportPolicy),
 		BundlePolicy:       webrtc.BundlePolicyMaxBundle,
 		RTCPMuxPolicy:      webrtc.RTCPMuxPolicyRequire,
 		ICEServers:         iceServers,
+		SDPSemantics:       webrtc.SDPSemanticsUnifiedPlan,
 	})
 	if err != nil {
 		log.Printf("Failed to create PeerConnection: %v", err)
@@ -687,9 +700,18 @@ func (wr *WebrtcReceiver) CreateDefaultPipeline(hostUrl string, login string, pa
 	return wr.Open()
 }
 
-func NewDefaultWebrtcReceiver(hostUrl string, login string, password string) (*WebrtcReceiver, error) {
+func NewDefaultWebrtcReceiver(hostUrl string, login string, password string, policy string) (*WebrtcReceiver, error) {
+	switch policy {
+	case webrtc.ICETransportPolicyNoHost.String():
+		policy = webrtc.ICETransportPolicyNoHost.String()
+	case webrtc.ICETransportPolicyRelay.String():
+		policy = webrtc.ICETransportPolicyRelay.String()
+	default:
+		policy = webrtc.ICETransportPolicyAll.String()
+	}
+
 	log.Println("new webrtc default")
-	wr := NewWebrtcReceiver()
+	wr := NewWebrtcReceiver(policy)
 
 	err := wr.CreateDefaultPipeline(hostUrl, login, password)
 	if err != nil {
