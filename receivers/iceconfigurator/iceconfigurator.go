@@ -3,8 +3,10 @@ package iceconfigurator
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
+        "log"
 	"io"
 	"net"
 	"net/http"
@@ -15,6 +17,7 @@ import (
 type PostResponse struct {
 	AccessToken string `json:"accessToken"`
 	Username    string `json:"username"`
+	Token       string `json:"token"`
 }
 
 type TurnServer struct {
@@ -27,6 +30,8 @@ type ICEConfigurator struct {
 	customResolver  *net.Resolver
 	customTransport *http.Transport
 	customClient    *http.Client
+	Token           string
+        Host            string
 
 	TurnServers     []TurnServer `json:"turnServers"`
 	StunServers     []string     `json:"stunServers"`
@@ -41,14 +46,14 @@ type ICEConfigurator struct {
 func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConfigurator, error) {
 
 	ice := &ICEConfigurator{Login: login}
-
+        ice.Host = hostUrl
 	ice.customResolver = &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 			d := &net.Dialer{
 				Timeout: time.Second * 2,
 			}
-			return d.DialContext(ctx, network, "8.8.8.8:53") // Google DNS
+			return d.DialContext(ctx, network, "8.8.8.8:53")
 		},
 	}
 
@@ -58,6 +63,7 @@ func NewICEConfigurator(hostUrl string, login string, password string) (*ICEConf
 			KeepAlive: 30 * time.Second,
 			Resolver:  ice.customResolver,
 		}).DialContext,
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
 	ice.customClient = &http.Client{
@@ -92,6 +98,7 @@ func (ice *ICEConfigurator) getToken(login string, password string, requestsPath
 	if err != nil {
 		return "", err
 	}
+
 	req.Header.Set("Content-Type", "application/json")
 
 	loginResponse, err := ice.customClient.Do(req)
@@ -119,7 +126,8 @@ func (ice *ICEConfigurator) getToken(login string, password string, requestsPath
 	if err != nil {
 		return "", err
 	}
-
+        log.Println("token is" + ice.Token)
+	ice.Token = accessToken.Token
 	return accessToken.AccessToken, nil
 }
 
@@ -146,5 +154,6 @@ func (ice *ICEConfigurator) getConfiguration(accessToken string, requestsPath st
 	if err != nil {
 		return err
 	}
+
 	return nil
 }

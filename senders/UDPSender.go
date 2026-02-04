@@ -2,6 +2,7 @@ package senders
 
 import (
 	"AirlinkStreamBridge/receivers"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -24,13 +25,12 @@ type UDPSender struct {
 
 func (sender *UDPSender) SetupUDP(address string, port int) error {
 	log.Printf("setup udp with %s:%d\n", address, port)
-	sender.setAddrMut.Lock()
-	defer sender.setAddrMut.Unlock()
 	if sender.socket != nil {
 		sender.socket.Close()
 	}
 
 	sender.udpAddr = address + ":" + strconv.Itoa(port)
+
 	var err error
 	//wr.udpSender, err = net.ListenPacket("udp", ":0")
 	//if err != nil {
@@ -63,32 +63,72 @@ func (sender *UDPSender) SetupUDP(address string, port int) error {
 func (sender *UDPSender) Send(data []byte) error {
 	sender.sendMut.Lock()
 	defer sender.sendMut.Unlock()
-	_, err := sender.socket.Write(data)
-	if err != nil {
-		sender.shouldReconnectEvent.Fire()
-		log.Printf("raw %v didn't write with error: %s", data, err)
-		return err
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from panic:", r)
+			sender.shouldReconnectEvent.Fire()
+		}
+	}()
+	if sender.socket != nil {
+		_, err := sender.socket.Write(data)
+		if err != nil {
+			sender.shouldReconnectEvent.Fire()
+			log.Printf("raw %v didn't write with error: %s", data, err)
+			return err
+		}
+	} else {
+		log.Println("udp socket is nil")
 	}
+
 	return nil
 }
 
 func (sender *UDPSender) Close() {
-	sender.socket.Close()
+	sender.setAddrMut.Lock()
+	defer sender.setAddrMut.Unlock()
+	if sender.socket != nil {
+		sender.socket.Close()
+	}
 }
 
 func (sender *UDPSender) udpWatchdog() {
 	reconnect := sender.shouldReconnectEvent.Subscribe()
 	defer sender.shouldReconnectEvent.Unsubscribe(reconnect)
+
 	for {
 		select {
 		case <-reconnect:
-			sender.socket.Close()
-			sender.SetupUDP(string(sender.udpNetAddr.IP), sender.udpNetAddr.Port)
-		default:
-			time.Sleep(time.Millisecond * 100)
+			log.Println("try reconnect")
+			if sender == nil || sender.udpNetAddr == nil {
+				log.Println("sender or udpNetAddr is nil, stopping watchdog")
+				return
+			}
+
+			sender.setAddrMut.Lock()
+			log.Println("Reconnecting UDP...")
+
+			if sender.socket != nil {
+				sender.socket.Close()
+			}
+
+			var err error
+			sender.socket, err = net.DialUDP("udp", nil, sender.udpNetAddr)
+			sender.setAddrMut.Unlock()
+
+			if err != nil {
+				log.Printf("Reconnect failed: %v", err)
+				time.Sleep(2 * time.Second)
+				sender.shouldReconnectEvent.Fire()
+			} else {
+				sender.socket.SetWriteBuffer(1 << 20)
+				log.Println("Reconnected successfully")
+			}
+
+		case <-time.After(30 * time.Second):
+			if sender.socket != nil {
+			}
 		}
 	}
-
 }
 
 func NewUDPSender(address string, port int) (ISender, error) {
@@ -102,4 +142,18 @@ func NewUDPSender(address string, port int) (ISender, error) {
 	err := sender.SetupUDP(address, port)
 	go sender.udpWatchdog()
 	return sender, err
+}
+
+func (sender *UDPSender) Relaunch() {
+	sender.shouldReconnectEvent.Fire()
+	//sender.SetupUDP(sender.udpAddr, sender.udpNetAddr.Port)
+}
+
+func (sender *UDPSender) SetSocket(conn *net.UDPConn) {
+	sender.setAddrMut.Lock()
+	defer sender.setAddrMut.Unlock()
+	if sender.socket != nil {
+		_ = sender.socket.Close()
+	}
+	sender.socket = conn
 }
