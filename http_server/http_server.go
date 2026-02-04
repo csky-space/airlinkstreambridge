@@ -538,6 +538,7 @@ func (server *Http_server) createDefaultReceiver(hostUrl string, login string, p
 	if server.wr != nil {
 		server.wr.Close()
 		server.wr.StopWatching()
+		server.wr.StopReadRTP()
 		server.wr = nil
 	}
 

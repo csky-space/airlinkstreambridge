@@ -45,6 +45,7 @@ type Webrtc_websocket struct {
 	Requested          *EventBroadcaster
 	Offered            *EventBroadcaster
 	Candidate          *EventBroadcaster
+	CloseRequester     *EventBroadcaster
 
 	onPing            func()
 	onOffer           func(sdp string) error
@@ -69,6 +70,7 @@ func NewWebrtcWebsocket(wsUrl string) (*Webrtc_websocket, error) {
 		Requested:          NewEventBroadcaster(),
 		Offered:            NewEventBroadcaster(),
 		Candidate:          NewEventBroadcaster(),
+		CloseRequester:     NewEventBroadcaster(),
 	}
 
 	ws.customResolver = &net.Resolver{
@@ -155,7 +157,16 @@ func (ws *Webrtc_websocket) readMessages() {
 		err := ws.wsConn.WriteControl(websocket.PongMessage, []byte(msg), time.Now().Add(time.Second))
 		return err
 	})
+
+	CloseRequestSub := ws.CloseRequester.Subscribe()
+	defer ws.CloseRequester.Unsubscribe(CloseRequestSub)
 	for {
+		select {
+		case <-CloseRequestSub:
+			log.Println("Websocket readMessages received close request")
+			return
+		default:
+		}
 		_, message, err := ws.wsConn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
@@ -230,9 +241,14 @@ func (ws *Webrtc_websocket) IsOpen() bool {
 }
 
 func (ws *Webrtc_websocket) Close() {
-	if ws.wsConn != nil {
+	if ws != nil {
+		closeSub := ws.CloseRequester.Subscribe()
+		defer ws.CloseRequester.Unsubscribe(closeSub)
+		ws.CloseRequester.Fire()
 		ws.isConnected = false
-		ws.wsConn.Close()
+		if ws.wsConn != nil {
+			ws.wsConn.Close()
+		}
 	}
 }
 
@@ -254,14 +270,19 @@ func (ws *Webrtc_websocket) startSignalling() error {
 func (ws *Webrtc_websocket) connectionWatchdog() {
 	unexpectedlySubscriber := ws.ClosedUnexpectedly.Subscribe()
 	expectedlySubscriber := ws.ClosedExpectedly.Subscribe()
+
+	defer func() {
+		ws.ClosedUnexpectedly.Unsubscribe(unexpectedlySubscriber)
+		ws.ClosedExpectedly.Unsubscribe(expectedlySubscriber)
+	}()
 	for {
 		select {
 		case <-unexpectedlySubscriber:
 			log.Println("unexpectedly close handler")
-			err := ws.establishWs()
-			if err != nil {
-				log.Printf("Establishing websoket connection failed with error: %v", err)
-			}
+			//err := ws.establishWs()
+			//if err != nil {
+			//	log.Printf("Establishing websoket connection failed with error: %v", err)
+			//}
 		case <-expectedlySubscriber:
 			log.Println("expectedly close handler")
 			err := ws.open()
