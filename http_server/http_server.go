@@ -1,8 +1,8 @@
 package httpserver
 
 import (
-	"AirlinkStreamBridge/receivers"
-	"AirlinkStreamBridge/senders"
+	"AirlinkStreamBridge/proxy"
+	"AirlinkStreamBridge/requests"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -40,25 +40,17 @@ type UDPProtocol struct {
 	Port     int    `json:"UDPPort"`
 }
 
-type DefaultReceiver struct {
-	HostName      string `json:"hostName"`
-	ModemName     string `json:"modemName"`
-	Password      string `json:"password"`
-	UDPPort       int    `json:"UDPPort"`
-	IcePolicyType string `json:"IcePolicy"`
-}
-
 type Http_server struct {
 	router          *mux.Router
 	tlsConfig       *tls.Config
 	cert            tls.Certificate
-	wr              *receivers.WebrtcReceiver
-	sender          senders.ISender
-	telemetrySender senders.ISender
+	wr              *proxy.WebrtcReceiver
+	sender          proxy.ISender
+	telemetrySender proxy.ISender
 	listener        net.Listener
-
-	closeMut       sync.Mutex
-	shouldBeClosed bool
+	proxyHandler    *ProxyHandler
+	closeMut        sync.Mutex
+	shouldBeClosed  bool
 }
 
 type IceTransportPolicy struct {
@@ -81,6 +73,8 @@ func (server *Http_server) categoryHandle(w http.ResponseWriter, r *http.Request
 		server.connectionCategoryHandle(w, r)
 	case "App":
 		server.appCategoryHandle(w, r)
+	case "Proxy":
+		server.proxyHandler.Handle(w, r)
 	default:
 		http.Error(w, "wrong category route "+vars["category"], http.StatusMethodNotAllowed)
 	}
@@ -175,7 +169,7 @@ func (server *Http_server) configureHandle(w http.ResponseWriter, r *http.Reques
 func (server *Http_server) createDefaultReceiverHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("createDefaultReceiverHandle")
 	log.Println("creating default")
-	var reqJSON DefaultReceiver
+	var reqJSON requests.DefaultReceiverRequest
 
 	err := json.NewDecoder(r.Body).Decode(&reqJSON)
 	if err != nil {
@@ -189,7 +183,7 @@ func (server *Http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 	if server.sender != nil {
 		server.sender.Close()
 	}
-	server.sender, err = senders.NewUDPSender("", reqJSON.UDPPort)
+	//server.sender, err = UDP.NewUDPSender("", reqJSON.UDPPort)
 	if err != nil {
 		http.Error(w, "udp sender creation error: "+err.Error(), http.StatusInternalServerError)
 		server.sender.Relaunch()
@@ -214,7 +208,7 @@ func (server *Http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 //}
 
 func (server *Http_server) setupCodecsHandle(w http.ResponseWriter, r *http.Request) {
-	var codecs []receivers.JSONCodec
+	var codecs []proxy.JSONCodec
 
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&codecs)
@@ -285,13 +279,13 @@ func (server *Http_server) setupOutputProtocolHandle(w http.ResponseWriter, r *h
 		if server.sender != nil {
 			server.sender.Close()
 		}
-		server.sender, err = senders.NewUDPSender(udpSetup.Address, udpSetup.Port)
+		//server.sender, err = UDP.NewUDPSender(udpSetup.Address, udpSetup.Port)
 		if err != nil {
 			http.Error(w, "udp sender creation error: "+err.Error(), http.StatusInternalServerError)
 			fmt.Fprintf(w, "{\"error\":\"%v\"}", err)
 		}
 
-		server.telemetrySender, err = senders.NewUDPSender("127.0.0.1", 14550)
+		//server.telemetrySender, err = UDP.NewUDPSender("127.0.0.1", 14550)
 		if err != nil {
 			http.Error(w, "Telemetry udp sender creation error: "+err.Error(), http.StatusInternalServerError)
 			fmt.Fprintf(w, "{\"error\":\"%v\"}", err)
@@ -517,7 +511,7 @@ func (server *Http_server) CloseApp() {
 }
 
 func NewHttpServer() *Http_server {
-	server := &Http_server{}
+	server := &Http_server{proxyHandler: NewProxyHandler()}
 	server.shouldBeClosed = false
 	server.wr = nil
 	return server
@@ -542,7 +536,7 @@ func (server *Http_server) createDefaultReceiver(hostUrl string, login string, p
 		server.wr = nil
 	}
 
-	server.wr, err = receivers.NewDefaultWebrtcReceiver(hostUrl, login, password, policy)
+	server.wr, err = proxy.NewDefaultWebrtcReceiver(hostUrl, login, password, policy)
 	if err != nil {
 		log.Println("default receiver creation error "+err.Error(), http.StatusInternalServerError)
 		http.Error(w, "default receiver creation error "+err.Error(), http.StatusInternalServerError)
