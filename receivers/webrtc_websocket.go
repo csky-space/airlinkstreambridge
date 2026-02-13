@@ -1,6 +1,7 @@
 package receivers
 
 import (
+	"AirlinkStreamBridge/events"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -39,13 +40,13 @@ type Webrtc_websocket struct {
 	wsConn     *websocket.Conn
 	wsUrl      string
 
-	ClosedExpectedly   *EventBroadcaster
-	ClosedUnexpectedly *EventBroadcaster
-	Pinged             *EventBroadcaster
-	Requested          *EventBroadcaster
-	Offered            *EventBroadcaster
-	Candidate          *EventBroadcaster
-	CloseRequester     *EventBroadcaster
+	ClosedExpectedly   *events.EventBroadcaster
+	ClosedUnexpectedly *events.EventBroadcaster
+	Pinged             *events.EventBroadcaster
+	Requested          *events.EventBroadcaster
+	Offered            *events.EventBroadcaster
+	Candidate          *events.EventBroadcaster
+	CloseRequester     *events.EventBroadcaster
 
 	onPing            func()
 	onOffer           func(sdp string) error
@@ -64,13 +65,13 @@ func NewWebrtcWebsocket(wsUrl string) (*Webrtc_websocket, error) {
 		readMutex:   sync.Mutex{},
 		writeMutex:  sync.Mutex{},
 		onPing:      func() {}, onOffer: func(sdp string) error { return nil }, onRemoteCandidate: func(candidate string) {},
-		ClosedExpectedly:   NewEventBroadcaster(),
-		ClosedUnexpectedly: NewEventBroadcaster(),
-		Pinged:             NewEventBroadcaster(),
-		Requested:          NewEventBroadcaster(),
-		Offered:            NewEventBroadcaster(),
-		Candidate:          NewEventBroadcaster(),
-		CloseRequester:     NewEventBroadcaster(),
+		ClosedExpectedly:   events.NewEventBroadcaster(),
+		ClosedUnexpectedly: events.NewEventBroadcaster(),
+		Pinged:             events.NewEventBroadcaster(),
+		Requested:          events.NewEventBroadcaster(),
+		Offered:            events.NewEventBroadcaster(),
+		Candidate:          events.NewEventBroadcaster(),
+		CloseRequester:     events.NewEventBroadcaster(),
 	}
 
 	ws.customResolver = &net.Resolver{
@@ -206,6 +207,7 @@ func (ws *Webrtc_websocket) readMessages() {
 		default:
 			log.Println("Error: Unknown message type:", msgType)
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

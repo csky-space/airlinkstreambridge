@@ -1,7 +1,7 @@
 package senders
 
 import (
-	"AirlinkStreamBridge/receivers"
+	"AirlinkStreamBridge/events"
 	"fmt"
 	"log"
 	"net"
@@ -20,7 +20,7 @@ type UDPSender struct {
 	setAddrMut sync.Mutex
 	sendMut    sync.Mutex
 
-	shouldReconnectEvent *receivers.EventBroadcaster
+	shouldReconnectEvent *events.EventBroadcaster
 }
 
 func (sender *UDPSender) SetupUDP(address string, port int) error {
@@ -138,7 +138,7 @@ func NewUDPSender(address string, port int) (ISender, error) {
 	if address == "" {
 		address = "127.0.0.1"
 	}
-	sender := &UDPSender{shouldReconnectEvent: receivers.NewEventBroadcaster()}
+	sender := &UDPSender{shouldReconnectEvent: events.NewEventBroadcaster()}
 	err := sender.SetupUDP(address, port)
 	go sender.udpWatchdog()
 	return sender, err
