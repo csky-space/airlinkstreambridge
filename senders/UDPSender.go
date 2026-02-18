@@ -131,7 +131,7 @@ func (sender *UDPSender) udpWatchdog() {
 	}
 }
 
-func NewUDPSender(address string, port int) (ISender, error) {
+func NewUDPSender(address string, port int) (*UDPSender, error) {
 	if port == 0 {
 		port = 9050
 	}
@@ -156,4 +156,30 @@ func (sender *UDPSender) SetSocket(conn *net.UDPConn) {
 		_ = sender.socket.Close()
 	}
 	sender.socket = conn
+}
+
+func (sender *UDPSender) GetSocket() *net.UDPConn {
+	sender.setAddrMut.Lock()
+	defer sender.setAddrMut.Unlock()
+	return sender.socket
+}
+
+func (sender *UDPSender) GetAddress() string {
+	sender.setAddrMut.Lock()
+	defer sender.setAddrMut.Unlock()
+	return sender.udpAddr
+}
+
+func (sender *UDPSender) GetNetAddress() *net.UDPAddr {
+	sender.setAddrMut.Lock()
+	defer sender.setAddrMut.Unlock()
+	return sender.udpNetAddr
+}
+
+func (sender *UDPSender) GetShouldReconnectEvent() *events.EventBroadcaster {
+	return sender.shouldReconnectEvent
+}
+
+func (sender *UDPSender) GetMutex() *sync.Mutex {
+	return &sender.sendMut
 }
