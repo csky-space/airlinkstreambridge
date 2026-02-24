@@ -53,3 +53,19 @@ type TransferIODeviceRequest struct {
 	Input  string `json:"inputName"`
 	Output string `json:"outputName"`
 }
+
+type IOConf struct {
+	Name           string   `json:"name"`
+	Type           string   `json:"type"`
+	Address        string   `json:"address,omitempty"`
+	TransferTo     []string `json:"transferTo,omitempty"`
+	Assign         []string `json:"assign,omitempty"`
+	Activate       bool     `json:"activate,omitempty"`
+	Login          string   `json:"login,omitempty"`
+	Password       string   `json:"password,omitempty"`
+	AstraModemType string   `json:"astraModemType,omitempty"`
+}
+
+type SingleRequest struct {
+	IOs []IOConf
+}

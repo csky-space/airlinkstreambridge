@@ -42,13 +42,11 @@ func (handler *ProxyHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		handler.proxyStartOutput(w, r)
 	case "startInput":
 		handler.proxyStartInput(w, r)
+	case "single":
+		handler.proxySingle(w, r)
 	default:
 		http.Error(w, "wrong method route "+vars["method"], http.StatusMethodNotAllowed)
 	}
-}
-
-func (handler *ProxyHandler) proxyCategoryHandle(w http.ResponseWriter, r *http.Request) {
-
 }
 
 func (handler *ProxyHandler) proxyAssignHandle(w http.ResponseWriter, r *http.Request) {
@@ -196,6 +194,96 @@ func (handler *ProxyHandler) proxyStartInput(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "input activation error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	fmt.Fprintf(w, "{\"success\":true}")
+	r.Body.Close()
+}
+
+func (handler *ProxyHandler) proxySingle(w http.ResponseWriter, r *http.Request) {
+	var reqJSON requests.SingleRequest
+
+	err := json.NewDecoder(r.Body).Decode(&reqJSON.IOs)
+	if err != nil {
+		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	for i := range reqJSON.IOs {
+		ioVal := reqJSON.IOs[i]
+		if (ioVal.Name != "") && (ioVal.Type != "") {
+			switch ioVal.Type {
+			case "InputUDP":
+				recv, err := proxy.NewUDPReceiver(ioVal.Name, ioVal.Address)
+				if err != nil {
+					http.Error(w, "Creating InputUDP from single request can't be completed: "+err.Error(), http.StatusBadRequest)
+					return
+				}
+				handler._proxy.AddInput(recv)
+				if recv == nil {
+					http.Error(w, "InputUDP didn't created due to server issue", http.StatusInternalServerError)
+					return
+				}
+				if ioVal.Activate {
+					recv.Activate()
+				}
+				if len(ioVal.TransferTo) > 0 {
+					for ind := range ioVal.TransferTo {
+						outp := handler._proxy.GetOutput(ioVal.TransferTo[ind])
+						if outp == nil {
+							http.Error(w, "Output "+ioVal.TransferTo[ind]+" doesn't exists", http.StatusBadRequest)
+							return
+						}
+						outp.SetDevice(recv.GetDevice())
+					}
+				}
+				if ioVal.Assign != nil {
+					for ind := range ioVal.Assign {
+						if ioVal.Assign[ind] != "" {
+							handler._proxy.Assign(recv.GetName(), ioVal.Assign[ind])
+						}
+					}
+				}
+
+			case "OutputUDP":
+				snd, err := proxy.NewUDPSender(ioVal.Name, ioVal.Address)
+				if err != nil {
+					http.Error(w, "Creating InputUDP from single request can't be completed: "+err.Error(), http.StatusBadRequest)
+					return
+				}
+				handler._proxy.AddOutput(snd)
+				if snd == nil {
+					http.Error(w, "InputUDP didn't created due to server issue", http.StatusInternalServerError)
+					return
+				}
+				if ioVal.Assign != nil {
+					for ind := range ioVal.Assign {
+						if ioVal.Assign[ind] != "" {
+							handler._proxy.Assign(ioVal.Assign[ind], snd.GetName())
+						}
+					}
+				}
+				if ioVal.Activate {
+					snd.Activate()
+				}
+			case "Astra":
+				recvSnd, err := proxy.NewAstra(ioVal.Name, ioVal.Login, ioVal.Password, ioVal.AstraModemType)
+				if err != nil {
+					http.Error(w, "Creating InputUDP from single request can't be completed: "+err.Error(), http.StatusBadRequest)
+					return
+				}
+				handler._proxy.AddInput(recvSnd)
+				handler._proxy.AddOutput(recvSnd)
+				if recvSnd == nil {
+					http.Error(w, "InputUDP didn't created due to server issue", http.StatusInternalServerError)
+					return
+				}
+				if ioVal.Activate {
+					recvSnd.Activate()
+				}
+			}
+
+		}
+	}
+
 	fmt.Fprintf(w, "{\"success\":true}")
 	r.Body.Close()
 }
