@@ -15,6 +15,14 @@ import (
 	"github.com/Enem-20/mavgoink/system"
 )
 
+const (
+	MAVLINK_ASTRA_RESPONSE_MSG_ID             = 52001
+	MAVLINK_ASTRA_REQUEST_MSG_CRC_EXTRA       = 13
+	MAVLINK_ASTRA_REQUEST_LOGIN_FIELD_SIZE    = 50
+	MAVLINK_ASTRA_REQUEST_PASSWORD_FIELD_SIZE = 50
+	MAVLINK_ASTRA_REQUEST_PAYLOAD_SIZE        = MAVLINK_ASTRA_REQUEST_LOGIN_FIELD_SIZE + MAVLINK_ASTRA_REQUEST_PASSWORD_FIELD_SIZE
+)
+
 type Modem struct {
 	Name     string `json:"name"`
 	Type     string `json:"type"`
@@ -117,6 +125,7 @@ func NewAstra(name string, login string, password string, modemType string) (*As
 		Password:  password,
 		name:      name,
 	}
+	astra.onData = make(map[string]func(data []byte) error)
 	sender.SetDevice(receiver.GetDevice())
 	astra.currentHost = astra.hosts[modemType]
 
@@ -149,9 +158,9 @@ func (astra *Astra) SendAuth() {
 	msg := astra.mavSystem.CreateMessage(1, 52000, byte(payloadSize))
 
 	copy(payload[0:len("7A161")], []byte("7A161"))
-	copy(payload[50:50+len(astra.Password)], []byte(astra.Password))
+	copy(payload[MAVLINK_ASTRA_REQUEST_LOGIN_FIELD_SIZE:MAVLINK_ASTRA_REQUEST_LOGIN_FIELD_SIZE+len(astra.Password)], []byte(astra.Password))
 	msg.PushBytes(payload[:])
-	msg.PushByte(13)
+	msg.PushByte(MAVLINK_ASTRA_REQUEST_MSG_CRC_EXTRA)
 	log.Printf("Sending auth packet %#X", msg.GetRawMessage())
 	err := astra.sender.Send(msg.GetRawMessage())
 	if err != nil {
@@ -160,12 +169,11 @@ func (astra *Astra) SendAuth() {
 }
 
 func (astra *Astra) Activate() error {
-
 	astra.receiver.SubscribeOnData(astra, func(data []byte) error {
 		msg := message.NewMessage()
 		msg.ParseFromBytes(data)
 		if msg.Payload.IsFull() {
-			if msg.Header.GetMsgID() == 52001 {
+			if msg.Header.GetMsgID() == MAVLINK_ASTRA_RESPONSE_MSG_ID {
 				switch msg.Payload.GetByte(0) {
 				case 1:
 					log.Println("Authorized!")

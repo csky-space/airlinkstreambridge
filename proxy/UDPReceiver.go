@@ -25,10 +25,11 @@ type UDPReceiver struct {
 
 func NewUDPReceiver(name string, address string) (*UDPReceiver, error) {
 	receiver := &UDPReceiver{name: name, shouldReconnectEvent: events.NewEventBroadcaster(), udpAddr: address}
+	receiver.onData = make(map[string]func(data []byte) error)
 	//err := receiver.SetupUDP(address, port)
 	//if err != nil {
 	//	return nil, err
-	//}
+	//}j
 	return receiver, nil
 }
 

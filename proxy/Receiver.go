@@ -10,7 +10,8 @@ type Receiver struct {
 }
 
 func (r *Receiver) SubscribeOnData(sub object.IObject, onData func(data []byte) error) {
-	r.onData[r.name+sub.GetName()] = onData
+
+	r.onData[sub.GetName()] = onData
 }
 
 func (r *Receiver) UnsubscribeOnData(sub object.IObject) {
