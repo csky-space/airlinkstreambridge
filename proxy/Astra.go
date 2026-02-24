@@ -1,8 +1,6 @@
-package receivers
+package proxy
 
 import (
-	"AirlinkStreamBridge/proxy"
-	"AirlinkStreamBridge/proxy/UDP"
 	"AirlinkStreamBridge/requests"
 	"bytes"
 	"encoding/json"
@@ -35,8 +33,8 @@ func NewAstraRegistry() *AstraRegistry {
 		outputTypes: make(map[string]reflect.Type),
 		inputTypes:  make(map[string]reflect.Type),
 	}
-	registry.RegisterOutputType("UDP", reflect.TypeOf((*UDP.UDPSender)(nil)).Elem())
-	registry.RegisterInputType("UDP", reflect.TypeOf((*UDP.UDPReceiver)(nil)).Elem())
+	registry.RegisterOutputType("UDP", reflect.TypeOf((*UDPSender)(nil)).Elem())
+	registry.RegisterInputType("UDP", reflect.TypeOf((*UDPReceiver)(nil)).Elem())
 	return registry
 }
 
@@ -59,10 +57,9 @@ func (registry *AstraRegistry) GetInputType(name string) (reflect.Type, bool) {
 }
 
 type Astra struct {
-	IReceiver
-	proxy.ISender
+	Receiver
+	ISender
 	Modem
-	onData       func(data []byte) error
 	Password     string
 	isAuthorized bool
 	sysId        uint8
@@ -70,8 +67,8 @@ type Astra struct {
 	seq          uint8
 	hosts        map[string]string
 	currentHost  string
-	receiver     proxy.IReceiver
-	sender       proxy.ISender
+	receiver     IReceiver
+	sender       ISender
 	mavSystem    *system.System
 	name         string
 }
@@ -89,13 +86,13 @@ type CreateAstraRequest struct {
 }
 
 func NewAstra(name string, login string, password string, modemType string) (*Astra, error) {
-	sender, err := UDP.NewUDPSender("serverSender", "astra.csky.space:10000")
+	sender, err := NewUDPSender("serverSender", "astra.csky.space:10000")
 	if err != nil {
 		log.Println("error: sender not created!")
 		return nil, err
 	}
 
-	receiver, err := UDP.NewUDPReceiver("serverReceiver", "astra.csky.space:10000")
+	receiver, err := NewUDPReceiver("serverReceiver", "astra.csky.space:10000")
 	if err != nil {
 		log.Println("error: receiver not created!")
 		return nil, err
@@ -164,7 +161,7 @@ func (astra *Astra) SendAuth() {
 
 func (astra *Astra) Activate() error {
 
-	astra.receiver.SetOnData(func(data []byte) error {
+	astra.receiver.SubscribeOnData(astra, func(data []byte) error {
 		msg := message.NewMessage()
 		msg.ParseFromBytes(data)
 		if msg.Payload.IsFull() {
@@ -178,8 +175,10 @@ func (astra *Astra) Activate() error {
 					astra.isAuthorized = false
 				}
 			} else {
-				if astra.onData != nil {
-					astra.onData(data)
+				if len(astra.onData) > 0 {
+					for _, onData := range astra.onData {
+						onData(data)
+					}
 				}
 			}
 		}
@@ -194,7 +193,7 @@ func (astra *Astra) Activate() error {
 }
 
 func (astra *Astra) SetOnTelemetry(onData func(data []byte) error) {
-	astra.receiver.SetOnData(onData)
+	astra.receiver.SubscribeOnData(astra, onData)
 }
 
 func (astra *Astra) GetName() string {
@@ -205,15 +204,11 @@ func (astra *Astra) Deactivate() error {
 	return nil
 }
 
-func (astra *Astra) SetOnData(onData func(data []byte) error) {
-	astra.onData = onData
-}
-
 func (astra *Astra) GetDevice() any {
 	return astra.receiver.GetDevice()
 }
 
-func (astra *Astra) GetServerSender() proxy.ISender {
+func (astra *Astra) GetServerSender() ISender {
 	return astra.sender
 }
 

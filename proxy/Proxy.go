@@ -5,6 +5,7 @@ import (
 )
 
 type Proxy struct {
+	Receiver
 	inputs  map[string]IReceiver
 	outputs map[string]ISender
 
@@ -33,9 +34,12 @@ func (proxy *Proxy) AddOutput(sender ISender) {
 func (proxy *Proxy) AddInput(receiver IReceiver) {
 	proxy.inputs[receiver.GetName()] = receiver
 	if proxy.isTransparent {
-		receiver.SetOnData(func(data []byte) error {
-			return proxy.Broadcast(data)
-		})
+		for _, value := range proxy.outputs {
+			receiver.SubscribeOnData(value, func(data []byte) error {
+				return proxy.Broadcast(data)
+			})
+		}
+
 	}
 }
 
@@ -46,9 +50,7 @@ func (proxy *Proxy) RemoveOutput(name string) {
 func (proxy *Proxy) RemoveInput(name string) {
 	delete(proxy.inputs, name)
 	if proxy.isTransparent {
-		proxy.GetInput(name).SetOnData(func(data []byte) error {
-			return nil
-		})
+		proxy.GetInput(name).UnsubscribeAll()
 	}
 }
 
@@ -63,7 +65,7 @@ func (proxy *Proxy) AssignExists(from string, to string) error {
 		return errors.New("Sender not found")
 	}
 
-	return proxy.Assign(receiver, sender)
+	return proxy.Assign(from, to)
 }
 
 func (proxy *Proxy) DismissExists(proxyName string) error {
@@ -77,13 +79,15 @@ func (proxy *Proxy) DismissExists(proxyName string) error {
 	return proxy.Dismiss(proxyName)
 }
 
-func (proxy *Proxy) Assign(from IReceiver, to ISender) error {
-	//proxy.AddInput(from)
-	//proxy.AddOutput(to)
+func (proxy *Proxy) Assign(from string, to string) error {
+	fromR := proxy.GetInput(from)
+	toT := proxy.GetOutput(to)
 
-	from.SetOnData(func(data []byte) error {
-		return to.Send(data)
-	})
+	if (fromR != nil) && (toT != nil) {
+		fromR.SubscribeOnData(toT, func(data []byte) error {
+			return toT.Send(data)
+		})
+	}
 
 	return nil
 }
@@ -109,7 +113,7 @@ func (proxy *Proxy) GetInput(name string) IReceiver {
 func (proxy *Proxy) StartTransparent() {
 	proxy.isTransparent = true
 	for _, receiver := range proxy.GetInputs() {
-		receiver.SetOnData(func(data []byte) error {
+		receiver.SubscribeOnData(proxy, func(data []byte) error {
 			proxy.Broadcast(data)
 			return nil
 		})
@@ -119,9 +123,7 @@ func (proxy *Proxy) StartTransparent() {
 func (proxy *Proxy) StopTransparent() {
 	proxy.isTransparent = false
 	for _, receiver := range proxy.GetInputs() {
-		receiver.SetOnData(func(data []byte) error {
-			return nil
-		})
+		receiver.UnsubscribeAll()
 	}
 }
 
@@ -138,13 +140,4 @@ func (proxy *Proxy) Send(data []byte, target string) error {
 		return sender.Send(data)
 	}
 	return errors.New("Sender not found")
-}
-
-func (proxy *Proxy) SetOnData(target string, onData func(data []byte) error) error {
-	receiver := proxy.GetInput(target)
-	if receiver != nil {
-		receiver.SetOnData(onData)
-		return nil
-	}
-	return errors.New("Receiver not found")
 }

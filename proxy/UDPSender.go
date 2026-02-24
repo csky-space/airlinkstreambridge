@@ -1,8 +1,7 @@
-package UDP
+package proxy
 
 import (
 	"AirlinkStreamBridge/events"
-	"AirlinkStreamBridge/proxy"
 	"log"
 	"net"
 	"os"
@@ -13,7 +12,7 @@ import (
 )
 
 type UDPSender struct {
-	proxy.ISender
+	ISender
 	socket     *net.UDPConn
 	udpAddr    string
 	udpNetAddr *net.UDPAddr

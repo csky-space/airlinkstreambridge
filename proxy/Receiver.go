@@ -1,21 +1,24 @@
 package proxy
 
+import "AirlinkStreamBridge/object"
+
 type Receiver struct {
 	name   string
 	device any
 
-	onData []func(data []byte) error
+	onData map[string]func(data []byte) error
 }
 
-func (r *Receiver) SubscribeOnData(onData func(data []byte) error) {
-	r.onData = append(r.onData, onData)
+func (r *Receiver) SubscribeOnData(sub object.IObject, onData func(data []byte) error) {
+	r.onData[r.name+sub.GetName()] = onData
 }
 
-func (r *Receiver) UnsubscribeOnData(onData func(data []byte) error) {
-	for i, subscribed := range r.onData {
-		if &subscribed == &onData {
-			r.onData = append(r.onData[:i], r.onData[i+1:]...)
-			return
-		}
+func (r *Receiver) UnsubscribeOnData(sub object.IObject) {
+	delete(r.onData, sub.GetName())
+}
+
+func (r *Receiver) UnsubscribeAll() {
+	for key, _ := range r.onData {
+		delete(r.onData, key)
 	}
 }

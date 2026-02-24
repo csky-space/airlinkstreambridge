@@ -2,8 +2,6 @@ package httpserver
 
 import (
 	"AirlinkStreamBridge/proxy"
-	"AirlinkStreamBridge/proxy/UDP"
-	"AirlinkStreamBridge/receivers"
 	"AirlinkStreamBridge/registry"
 	"AirlinkStreamBridge/requests"
 	"encoding/json"
@@ -61,13 +59,7 @@ func (handler *ProxyHandler) proxyAssignHandle(w http.ResponseWriter, r *http.Re
 		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	receiver := handler._proxy.GetInput(reqJSON.InputName)
-	sender := handler._proxy.GetOutput(reqJSON.OutputName)
-	if receiver == nil || sender == nil {
-		http.Error(w, "receiver or sender not found", http.StatusNotFound)
-		return
-	}
-	err = handler._proxy.Assign(receiver, sender)
+	err = handler._proxy.Assign(reqJSON.InputName, reqJSON.OutputName)
 	if err != nil {
 		http.Error(w, "assignment error: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -109,7 +101,7 @@ func (handler *ProxyHandler) proxyCreateOutput(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	sender, err := UDP.NewUDPSender(reqJSON.OutputName, reqJSON.Address)
+	sender, err := proxy.NewUDPSender(reqJSON.OutputName, reqJSON.Address)
 	if err != nil {
 		http.Error(w, "UDP Sender creation error: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -127,14 +119,14 @@ func (handler *ProxyHandler) proxyCreateInput(w http.ResponseWriter, r *http.Req
 	}
 	switch reqJSON.Type {
 	case "Astra":
-		receiver, err := receivers.NewAstra(reqJSON.InputName, reqJSON.Login, reqJSON.Password, reqJSON.Modem)
+		receiver, err := proxy.NewAstra(reqJSON.InputName, reqJSON.Login, reqJSON.Password, reqJSON.Modem)
 		if err != nil {
 			http.Error(w, "Astra input creation error: "+err.Error(), http.StatusInternalServerError)
 		}
 		handler._proxy.AddOutput(receiver)
 		handler._proxy.AddInput(receiver)
 	case "UDP":
-		receiver, err := UDP.NewUDPReceiver(reqJSON.InputName, reqJSON.Address)
+		receiver, err := proxy.NewUDPReceiver(reqJSON.InputName, reqJSON.Address)
 		if err != nil {
 			http.Error(w, "UDP input creation error: "+err.Error(), http.StatusInternalServerError)
 			return

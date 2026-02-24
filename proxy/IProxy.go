@@ -1,7 +1,9 @@
 package proxy
 
+import "AirlinkStreamBridge/object"
+
 type IProxy interface {
-	GetName() string
+	object.IObject
 	Activate() error
 	Deactivate() error
 }

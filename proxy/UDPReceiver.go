@@ -1,4 +1,4 @@
-package UDP
+package proxy
 
 import (
 	"AirlinkStreamBridge/events"
@@ -12,6 +12,7 @@ import (
 )
 
 type UDPReceiver struct {
+	Receiver
 	socket     *net.UDPConn
 	udpAddr    string
 	udpNetAddr *net.UDPAddr
@@ -20,8 +21,6 @@ type UDPReceiver struct {
 	name       string
 
 	shouldReconnectEvent *events.EventBroadcaster
-
-	onData func(data []byte) error
 }
 
 func NewUDPReceiver(name string, address string) (*UDPReceiver, error) {
@@ -96,21 +95,22 @@ func (receiver *UDPReceiver) SetupUDP(addressPort string) error {
 				continue
 			}
 			log.Printf("Received %d bytes from %s", n, remoteAddr)
-			if receiver.onData != nil {
-				err = receiver.onData(buf[:n])
-				if err != nil {
-					log.Printf("onData error: %v", err)
+			if len(receiver.onData) > 0 {
+				for _, onData := range receiver.onData {
+					if onData != nil {
+						err = onData(buf[:n])
+						if err != nil {
+							log.Printf("onData error: %v", err)
+						}
+					}
 				}
+
 			}
 		}
 	}()
 
 	log.Printf("end of setup udp with %s\n", receiver.udpAddr)
 	return nil
-}
-
-func (rec *UDPReceiver) SetOnData(onData func(data []byte) error) {
-	rec.onData = onData
 }
 
 func (receiver *UDPReceiver) GetDevice() any {
