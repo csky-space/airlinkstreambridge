@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"errors"
+	"log"
 )
 
 type Proxy struct {
@@ -43,40 +44,27 @@ func (proxy *Proxy) AddInput(receiver IReceiver) {
 	}
 }
 
-func (proxy *Proxy) RemoveOutput(name string) {
+func (proxy *Proxy) RemoveOutput(name string) error {
+	if proxy.outputs[name] == nil {
+		errStr := "The output " + name + " doesn't exist"
+		log.Println(errStr)
+		return errors.New(errStr)
+	}
 	delete(proxy.outputs, name)
+	return nil
 }
 
-func (proxy *Proxy) RemoveInput(name string) {
-	delete(proxy.inputs, name)
+func (proxy *Proxy) RemoveInput(name string) error {
+	if proxy.inputs[name] == nil {
+		errStr := "The output " + name + " doesn't exist"
+		log.Println(errStr)
+		return errors.New(errStr)
+	}
 	if proxy.isTransparent {
 		proxy.GetInput(name).UnsubscribeAll()
 	}
-}
-
-func (proxy *Proxy) AssignExists(from string, to string) error {
-	receiver := proxy.GetInput(from)
-	sender := proxy.GetOutput(to)
-
-	if receiver == nil {
-		return errors.New("Receiver not found")
-	}
-	if sender == nil {
-		return errors.New("Sender not found")
-	}
-
-	return proxy.Assign(from, to)
-}
-
-func (proxy *Proxy) DismissExists(proxyName string) error {
-	if _, ok := proxy.outputs[proxyName]; !ok {
-		return errors.New("Sender not found")
-	}
-	if _, ok := proxy.inputs[proxyName]; !ok {
-		return errors.New("Receiver not found")
-	}
-
-	return proxy.Dismiss(proxyName)
+	delete(proxy.inputs, name)
+	return nil
 }
 
 func (proxy *Proxy) Assign(from string, to string) error {

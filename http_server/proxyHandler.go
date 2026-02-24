@@ -140,7 +140,7 @@ func (handler *ProxyHandler) proxyRemoveOutput(w http.ResponseWriter, r *http.Re
 		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = handler._proxy.DismissExists(reqJSON.OutputName)
+	err = handler._proxy.Dismiss(reqJSON.OutputName)
 	if err != nil {
 		http.Error(w, "Dismiss error: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -223,7 +223,11 @@ func (handler *ProxyHandler) proxySingle(w http.ResponseWriter, r *http.Request)
 					return
 				}
 				if ioVal.Activate {
-					recv.Activate()
+					err = recv.Activate()
+					if err != nil {
+						http.Error(w, "Activation "+ioVal.Name+" failed: "+err.Error(), http.StatusBadRequest)
+						return
+					}
 				}
 				if len(ioVal.TransferTo) > 0 {
 					for ind := range ioVal.TransferTo {
@@ -238,7 +242,11 @@ func (handler *ProxyHandler) proxySingle(w http.ResponseWriter, r *http.Request)
 				if ioVal.Assign != nil {
 					for ind := range ioVal.Assign {
 						if ioVal.Assign[ind] != "" {
-							handler._proxy.Assign(recv.GetName(), ioVal.Assign[ind])
+							err = handler._proxy.Assign(recv.GetName(), ioVal.Assign[ind])
+							if err != nil {
+								http.Error(w, "Assigning "+ioVal.Name+" to "+ioVal.Assign[ind]+" failed: "+err.Error(), http.StatusBadRequest)
+								return
+							}
 						}
 					}
 				}
@@ -257,12 +265,20 @@ func (handler *ProxyHandler) proxySingle(w http.ResponseWriter, r *http.Request)
 				if ioVal.Assign != nil {
 					for ind := range ioVal.Assign {
 						if ioVal.Assign[ind] != "" {
-							handler._proxy.Assign(ioVal.Assign[ind], snd.GetName())
+							err = handler._proxy.Assign(ioVal.Assign[ind], snd.GetName())
+							if err != nil {
+								http.Error(w, "Assigning "+ioVal.Name+" to "+ioVal.Assign[ind]+" failed: "+err.Error(), http.StatusBadRequest)
+								return
+							}
 						}
 					}
 				}
 				if ioVal.Activate {
-					snd.Activate()
+					err = snd.Activate()
+					if err != nil {
+						http.Error(w, "Activation "+ioVal.Name+" failed: "+err.Error(), http.StatusBadRequest)
+						return
+					}
 				}
 			case "Astra":
 				recvSnd, err := proxy.NewAstra(ioVal.Name, ioVal.Login, ioVal.Password, ioVal.AstraModemType)
@@ -277,7 +293,11 @@ func (handler *ProxyHandler) proxySingle(w http.ResponseWriter, r *http.Request)
 					return
 				}
 				if ioVal.Activate {
-					recvSnd.Activate()
+					err = recvSnd.Activate()
+					if err != nil {
+						http.Error(w, "Activation "+ioVal.Name+" failed: "+err.Error(), http.StatusBadRequest)
+						return
+					}
 				}
 			}
 
