@@ -1,7 +1,8 @@
-package receivers
+package proxy
 
 import (
-	"AirlinkStreamBridge/receivers/iceconfigurator"
+	"AirlinkStreamBridge/events"
+	"AirlinkStreamBridge/iceconfigurator"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -24,6 +25,8 @@ import (
 var id string = rand.Text()
 
 type WebrtcReceiver struct {
+	Receiver
+	ISender
 	api         *webrtc.API
 	mediaEngine *webrtc.MediaEngine
 
@@ -48,13 +51,13 @@ type WebrtcReceiver struct {
 	//PeerFailed            chan struct{}
 	//PeerDisconnected      chan struct{}
 	//WebrtcReceiverCreated chan struct{}
-	PeerClosed            *EventBroadcaster
-	PeerConnected         *EventBroadcaster
-	PeerFailed            *EventBroadcaster
-	PeerDisconnected      *EventBroadcaster
-	WebrtcReceiverCreated *EventBroadcaster
-	WatchdogStopRequest   *EventBroadcaster
-	ReadRTPStopRequest    *EventBroadcaster
+	PeerClosed            *events.EventBroadcaster
+	PeerConnected         *events.EventBroadcaster
+	PeerFailed            *events.EventBroadcaster
+	PeerDisconnected      *events.EventBroadcaster
+	WebrtcReceiverCreated *events.EventBroadcaster
+	WatchdogStopRequest   *events.EventBroadcaster
+	ReadRTPStopRequest    *events.EventBroadcaster
 
 	channelsMutex sync.Mutex
 
@@ -273,13 +276,13 @@ func (wr *WebrtcReceiver) Configure(hostUrl string, login string, password strin
 
 func NewWebrtcReceiver(policy string) *WebrtcReceiver {
 	wr := &WebrtcReceiver{
-		PeerClosed:            NewEventBroadcaster(),
-		PeerConnected:         NewEventBroadcaster(),
-		PeerFailed:            NewEventBroadcaster(),
-		PeerDisconnected:      NewEventBroadcaster(),
-		WebrtcReceiverCreated: NewEventBroadcaster(),
-		WatchdogStopRequest:   NewEventBroadcaster(),
-		ReadRTPStopRequest:    NewEventBroadcaster(),
+		PeerClosed:            events.NewEventBroadcaster(),
+		PeerConnected:         events.NewEventBroadcaster(),
+		PeerFailed:            events.NewEventBroadcaster(),
+		PeerDisconnected:      events.NewEventBroadcaster(),
+		WebrtcReceiverCreated: events.NewEventBroadcaster(),
+		WatchdogStopRequest:   events.NewEventBroadcaster(),
+		ReadRTPStopRequest:    events.NewEventBroadcaster(),
 		peerConnectTimeout:    time.NewTimer(1000000000 * time.Second), videoTrackTimeout: time.NewTimer(1000000000 * time.Second), iceTrickleEnabled: false,
 		currentCodec:    "Disabled",
 		isRTPFailed:     false,
@@ -875,4 +878,16 @@ func (wr *WebrtcReceiver) PeerClose() {
 
 func (wr *WebrtcReceiver) WsIsOpen() bool {
 	return wr.ws.IsOpen()
+}
+
+func (wr *WebrtcReceiver) GetDevice() any {
+	return wr.pc
+}
+
+func (wr *WebrtcReceiver) Activate() {
+	wr.Open()
+}
+
+func (wr *WebrtcReceiver) Deactivate() {
+	wr.Close()
 }
