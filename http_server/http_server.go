@@ -2,7 +2,6 @@ package httpserver
 
 import (
 	"AirlinkStreamBridge/proxy"
-	"AirlinkStreamBridge/receivers"
 	"AirlinkStreamBridge/requests"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -45,7 +44,7 @@ type Http_server struct {
 	router          *mux.Router
 	tlsConfig       *tls.Config
 	cert            tls.Certificate
-	wr              *receivers.WebrtcReceiver
+	wr              *proxy.WebrtcReceiver
 	sender          proxy.ISender
 	telemetrySender proxy.ISender
 	listener        net.Listener
@@ -209,7 +208,7 @@ func (server *Http_server) createDefaultReceiverHandle(w http.ResponseWriter, r 
 //}
 
 func (server *Http_server) setupCodecsHandle(w http.ResponseWriter, r *http.Request) {
-	var codecs []receivers.JSONCodec
+	var codecs []proxy.JSONCodec
 
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&codecs)
@@ -537,7 +536,7 @@ func (server *Http_server) createDefaultReceiver(hostUrl string, login string, p
 		server.wr = nil
 	}
 
-	server.wr, err = receivers.NewDefaultWebrtcReceiver(hostUrl, login, password, policy)
+	server.wr, err = proxy.NewDefaultWebrtcReceiver(hostUrl, login, password, policy)
 	if err != nil {
 		log.Println("default receiver creation error "+err.Error(), http.StatusInternalServerError)
 		http.Error(w, "default receiver creation error "+err.Error(), http.StatusInternalServerError)

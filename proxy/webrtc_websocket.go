@@ -1,4 +1,4 @@
-package receivers
+package proxy
 
 import (
 	"AirlinkStreamBridge/events"

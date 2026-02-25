@@ -1,8 +1,8 @@
-package receivers
+package proxy
 
 import (
 	"AirlinkStreamBridge/events"
-	"AirlinkStreamBridge/receivers/iceconfigurator"
+	"AirlinkStreamBridge/iceconfigurator"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -25,6 +25,8 @@ import (
 var id string = rand.Text()
 
 type WebrtcReceiver struct {
+	Receiver
+	ISender
 	api         *webrtc.API
 	mediaEngine *webrtc.MediaEngine
 
