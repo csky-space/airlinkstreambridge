@@ -536,7 +536,7 @@ func (server *Http_server) createDefaultReceiver(hostUrl string, login string, p
 		server.wr = nil
 	}
 
-	server.wr, err = proxy.NewDefaultWebrtcReceiver(hostUrl, login, password, policy)
+	server.wr, err = proxy.NewDefaultWebrtcReceiver("", hostUrl, login, password, policy)
 	if err != nil {
 		log.Println("default receiver creation error "+err.Error(), http.StatusInternalServerError)
 		http.Error(w, "default receiver creation error "+err.Error(), http.StatusInternalServerError)

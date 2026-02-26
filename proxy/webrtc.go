@@ -274,7 +274,7 @@ func (wr *WebrtcReceiver) Configure(hostUrl string, login string, password strin
 	return nil
 }
 
-func NewWebrtcReceiver(policy string) *WebrtcReceiver {
+func NewWebrtcReceiver(name, policy string) *WebrtcReceiver {
 	wr := &WebrtcReceiver{
 		PeerClosed:            events.NewEventBroadcaster(),
 		PeerConnected:         events.NewEventBroadcaster(),
@@ -289,7 +289,8 @@ func NewWebrtcReceiver(policy string) *WebrtcReceiver {
 		isOurDisconnect: false,
 		transportPolicy: policy,
 	}
-
+	wr.name = name
+	wr.onData = make(map[string]func(data []byte) error)
 	return wr
 }
 
@@ -576,11 +577,14 @@ func (wr *WebrtcReceiver) onTrack(track *webrtc.TrackRemote, receiver *webrtc.RT
 			if wr.transmitEnabled {
 				wr.videoIsRunning = true
 
-				err = wr.onRTP(raw)
-				if err != nil {
-					wr.videoIsRunning = false
-					log.Printf("raw %v didn't write with error: %s", raw, err)
+				for i := range wr.onData {
+					err = wr.onData[i](raw)
+					if err != nil {
+						wr.videoIsRunning = false
+						log.Printf("raw %v didn't write with error: %s", raw, err)
+					}
 				}
+
 			} else {
 				wr.videoIsRunning = false
 			}
@@ -708,7 +712,7 @@ func (wr *WebrtcReceiver) createPeerConnection() error {
 		log.Println("Catch dc: " + channel.Label())
 		if channel.Label() == "telemetry" {
 			channel.OnMessage(func(msg webrtc.DataChannelMessage) {
-				wr.onTelemetry(msg.Data)
+				//wr.onTelemetry(msg.Data)
 			})
 		}
 	})
@@ -733,7 +737,7 @@ func (wr *WebrtcReceiver) CreateDefaultPipeline(hostUrl string, login string, pa
 	return wr.Open()
 }
 
-func NewDefaultWebrtcReceiver(hostUrl string, login string, password string, policy string) (*WebrtcReceiver, error) {
+func NewDefaultWebrtcReceiver(name string, hostUrl string, login string, password string, policy string) (*WebrtcReceiver, error) {
 	switch policy {
 	case webrtc.ICETransportPolicyNoHost.String():
 		policy = webrtc.ICETransportPolicyNoHost.String()
@@ -744,7 +748,7 @@ func NewDefaultWebrtcReceiver(hostUrl string, login string, password string, pol
 	}
 
 	log.Println("new webrtc default")
-	wr := NewWebrtcReceiver(policy)
+	wr := NewWebrtcReceiver(name, policy)
 
 	err := wr.CreateDefaultPipeline(hostUrl, login, password)
 	if err != nil {
@@ -884,10 +888,15 @@ func (wr *WebrtcReceiver) GetDevice() any {
 	return wr.pc
 }
 
-func (wr *WebrtcReceiver) Activate() {
-	wr.Open()
+func (wr *WebrtcReceiver) Activate() error {
+	return wr.ReLaunchPeer()
 }
 
-func (wr *WebrtcReceiver) Deactivate() {
+func (wr *WebrtcReceiver) Deactivate() error {
 	wr.Close()
+	return nil
+}
+
+func (wr *WebrtcReceiver) GetName() string {
+	return wr.name
 }

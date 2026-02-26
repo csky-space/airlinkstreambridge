@@ -11,7 +11,6 @@ type Receiver struct {
 }
 
 func (r *Receiver) SubscribeOnData(sub object.IObject, onData func(data []byte) error) {
-
 	r.onData[sub.GetName()] = onData
 }
 
@@ -23,4 +22,8 @@ func (r *Receiver) UnsubscribeAll() {
 	for key, _ := range r.onData {
 		delete(r.onData, key)
 	}
+}
+
+func (r *Receiver) GetName() string {
+	return r.name
 }

@@ -33,7 +33,8 @@ func (proxy *Proxy) AddOutput(sender ISender) {
 }
 
 func (proxy *Proxy) AddInput(receiver IReceiver) {
-	proxy.inputs[receiver.GetName()] = receiver
+	name := receiver.GetName()
+	proxy.inputs[name] = receiver
 	if proxy.isTransparent {
 		for _, value := range proxy.outputs {
 			receiver.SubscribeOnData(value, func(data []byte) error {
@@ -71,7 +72,7 @@ func (proxy *Proxy) Assign(from string, to string) error {
 	fromR := proxy.GetInput(from)
 	toT := proxy.GetOutput(to)
 
-	if (fromR != nil) && (toT != nil) {
+	if (fromR != nil) && (toT != nil) && (fromR.SubscribeOnData != nil) {
 		fromR.SubscribeOnData(toT, func(data []byte) error {
 			return toT.Send(data)
 		})
@@ -80,7 +81,7 @@ func (proxy *Proxy) Assign(from string, to string) error {
 	return nil
 }
 
-func (proxy *Proxy) Dismiss(proxyName string) error {
+func (proxy *Proxy) DismissInput(proxyName string) error {
 	delete(proxy.outputs, proxyName)
 	delete(proxy.inputs, proxyName)
 	return nil

@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/pion/webrtc/v4"
 )
 
 type ProxyHandler struct {
@@ -25,31 +26,31 @@ func (handler *ProxyHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	switch vars["method"] {
 	case "assign":
-		handler.proxyAssignHandle(w, r)
+		handler.assignHandle(w, r)
 	case "dismiss":
-		handler.proxyDismissHandle(w, r)
+		handler.dismissHandle(w, r)
 	case "TransferIODevice":
-		handler.proxyTransferDeviceHandle(w, r)
+		handler.transferDeviceHandle(w, r)
 	case "createOutput":
-		handler.proxyCreateOutput(w, r)
+		handler.createOutput(w, r)
 	case "createInput":
-		handler.proxyCreateInput(w, r)
+		handler.createInput(w, r)
 	case "removeOutput":
-		handler.proxyRemoveOutput(w, r)
+		handler.removeOutput(w, r)
 	case "removeInput":
-		handler.proxyRemoveInput(w, r)
+		handler.removeInput(w, r)
 	case "startOutput":
-		handler.proxyStartOutput(w, r)
+		handler.startOutput(w, r)
 	case "startInput":
-		handler.proxyStartInput(w, r)
+		handler.startInput(w, r)
 	case "single":
-		handler.proxySingle(w, r)
+		handler.single(w, r)
 	default:
 		http.Error(w, "wrong method route "+vars["method"], http.StatusMethodNotAllowed)
 	}
 }
 
-func (handler *ProxyHandler) proxyAssignHandle(w http.ResponseWriter, r *http.Request) {
+func (handler *ProxyHandler) assignHandle(w http.ResponseWriter, r *http.Request) {
 	var reqJSON requests.AssignRequest
 
 	err := json.NewDecoder(r.Body).Decode(&reqJSON)
@@ -65,10 +66,10 @@ func (handler *ProxyHandler) proxyAssignHandle(w http.ResponseWriter, r *http.Re
 	fmt.Fprintf(w, "{\"success\":true}")
 }
 
-func (handler *ProxyHandler) proxyDismissHandle(w http.ResponseWriter, r *http.Request) {
+func (handler *ProxyHandler) dismissHandle(w http.ResponseWriter, r *http.Request) {
 }
 
-func (handler *ProxyHandler) proxyTransferDeviceHandle(w http.ResponseWriter, r *http.Request) {
+func (handler *ProxyHandler) transferDeviceHandle(w http.ResponseWriter, r *http.Request) {
 	var reqJSON requests.TransferIODeviceRequest
 	err := json.NewDecoder(r.Body).Decode(&reqJSON)
 	if err != nil {
@@ -90,7 +91,7 @@ func (handler *ProxyHandler) proxyTransferDeviceHandle(w http.ResponseWriter, r 
 	fmt.Fprintf(w, "{\"success\":true}")
 }
 
-func (handler *ProxyHandler) proxyCreateOutput(w http.ResponseWriter, r *http.Request) {
+func (handler *ProxyHandler) createOutput(w http.ResponseWriter, r *http.Request) {
 	var reqJSON requests.CreateOutputRequest
 
 	err := json.NewDecoder(r.Body).Decode(&reqJSON)
@@ -107,7 +108,7 @@ func (handler *ProxyHandler) proxyCreateOutput(w http.ResponseWriter, r *http.Re
 	handler._proxy.AddOutput(sender)
 }
 
-func (handler *ProxyHandler) proxyCreateInput(w http.ResponseWriter, r *http.Request) {
+func (handler *ProxyHandler) createInput(w http.ResponseWriter, r *http.Request) {
 	var reqJSON requests.CreateInputRequest
 
 	err := json.NewDecoder(r.Body).Decode(&reqJSON)
@@ -133,14 +134,14 @@ func (handler *ProxyHandler) proxyCreateInput(w http.ResponseWriter, r *http.Req
 	}
 }
 
-func (handler *ProxyHandler) proxyRemoveOutput(w http.ResponseWriter, r *http.Request) {
+func (handler *ProxyHandler) removeOutput(w http.ResponseWriter, r *http.Request) {
 	var reqJSON requests.RemoveOutputRequest
 	err := json.NewDecoder(r.Body).Decode(&reqJSON)
 	if err != nil {
 		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = handler._proxy.Dismiss(reqJSON.OutputName)
+	err = handler._proxy.RemoveOutput(reqJSON.OutputName)
 	if err != nil {
 		http.Error(w, "Dismiss error: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -148,11 +149,22 @@ func (handler *ProxyHandler) proxyRemoveOutput(w http.ResponseWriter, r *http.Re
 	fmt.Fprintf(w, "{\"success\":true}")
 }
 
-func (handler *ProxyHandler) proxyRemoveInput(w http.ResponseWriter, r *http.Request) {
-
+func (handler *ProxyHandler) removeInput(w http.ResponseWriter, r *http.Request) {
+	var reqJSON requests.RemoveInputRequest
+	err := json.NewDecoder(r.Body).Decode(&reqJSON)
+	if err != nil {
+		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = handler._proxy.RemoveInput(reqJSON.InputName)
+	if err != nil {
+		http.Error(w, "Dismiss error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprintf(w, "{\"success\":true}")
 }
 
-func (handler *ProxyHandler) proxyStartOutput(w http.ResponseWriter, r *http.Request) {
+func (handler *ProxyHandler) startOutput(w http.ResponseWriter, r *http.Request) {
 	var reqJSON requests.StartOutputRequest
 
 	err := json.NewDecoder(r.Body).Decode(&reqJSON)
@@ -175,7 +187,7 @@ func (handler *ProxyHandler) proxyStartOutput(w http.ResponseWriter, r *http.Req
 	r.Body.Close()
 }
 
-func (handler *ProxyHandler) proxyStartInput(w http.ResponseWriter, r *http.Request) {
+func (handler *ProxyHandler) startInput(w http.ResponseWriter, r *http.Request) {
 	var reqJSON requests.StartInputRequest
 
 	err := json.NewDecoder(r.Body).Decode(&reqJSON)
@@ -198,7 +210,7 @@ func (handler *ProxyHandler) proxyStartInput(w http.ResponseWriter, r *http.Requ
 	r.Body.Close()
 }
 
-func (handler *ProxyHandler) proxySingle(w http.ResponseWriter, r *http.Request) {
+func (handler *ProxyHandler) single(w http.ResponseWriter, r *http.Request) {
 	var reqJSON requests.SingleRequest
 
 	err := json.NewDecoder(r.Body).Decode(&reqJSON.IOs)
@@ -299,8 +311,30 @@ func (handler *ProxyHandler) proxySingle(w http.ResponseWriter, r *http.Request)
 						return
 					}
 				}
+			case "WebrtcInput":
+				astraModemInput := handler._proxy.GetInput(ioVal.ConfigureFromModem)
+				switch astraModem := astraModemInput.(type) {
+				case *proxy.Astra:
+					astraPolicy := webrtc.NewICETransportPolicy(ioVal.IceTransportPolicy)
+					_webrtc, err := proxy.NewDefaultWebrtcReceiver(ioVal.Name, astraModem.GetHostname(), astraModem.Login, astraModem.Password, astraPolicy.String())
+					if err != nil {
+						http.Error(w, "WebrtcInput couldn't be created: "+err.Error(), http.StatusInternalServerError)
+						return
+					}
+					if ioVal.Activate {
+						err = _webrtc.Activate()
+						if err != nil {
+							http.Error(w, "Failed to activate WebrtcInput "+ioVal.Name+": "+err.Error(), http.StatusInternalServerError)
+							return
+						}
+					}
+					handler._proxy.AddInput(_webrtc)
+				case nil:
+					http.Error(w, "WebrtcInput couldn't be created. Astra modem "+ioVal.ConfigureFromModem+" not found", http.StatusBadRequest)
+					return
+				}
+				//recv, err := proxy.NewDefaultWebrtcReceiver()
 			}
-
 		}
 	}
 

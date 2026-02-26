@@ -243,3 +243,7 @@ func (astra *Astra) Relaunch() {
 func (astra *Astra) SetDevice(device any) {
 
 }
+
+func (astra *Astra) GetHostname() string {
+	return astra.currentHost
+}
